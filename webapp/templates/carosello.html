@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+{% block titolo %}{{ carosello.nome_carosello }} — Generatore Caroselli{% endblock %}
+
+{% block contenuto %}
+<h1>{{ carosello.nome_carosello }}</h1>
+<p class="sottotitolo">{{ carosello.argomento }} — {{ carosello.numero_slide }} slide</p>
+
+{% for view in slides_view %}
+  {% set slide = view.slide %}
+  <div class="pannello slide-card" data-slide-card data-numero="{{ slide.numero }}" data-presente="{{ '1' if view.immagine_presente else '0' }}">
+    <div>
+      <div class="slide-num">SLIDE {{ '%02d' % slide.numero }}</div>
+      <div class="mini-slide" data-mini-slide>
+        {% if view.composta %}
+          <img src="{{ url_for('file_output', nome=carosello.nome_carosello, numero=slide.numero) }}" alt="Slide {{ slide.numero }} composta">
+        {% elif view.immagine_presente %}
+          <img src="{{ url_for('file_input', nome=carosello.nome_carosello, numero=slide.numero) }}" alt="Sfondo slide {{ slide.numero }}">
+        {% else %}
+          <div class="placeholder">Nessuna immagine di sfondo caricata</div>
+        {% endif %}
+      </div>
+      <label class="dropzone" data-dropzone>
+        <span data-dropzone-testo>{{ 'Sostituisci immagine' if view.immagine_presente else 'Carica immagine di sfondo' }}</span>
+        <input type="file" accept="image/png,image/jpeg" data-input-immagine>
+      </label>
+      <button class="btn btn-secondario btn-piccolo" style="margin-top:8px;width:100%" data-btn-apri-ricerca>
+        Cerca immagine pubblica
+      </button>
+      <label class="spunta" title="Per le foto reali: il testo va in una fascia in alto e la foto sotto">
+        <input type="checkbox" data-tipo-foto {{ 'checked' if slide.tipo_sfondo == 'foto' }}> Layout foto (testo sopra)
+      </label>
+      {% if slide.credito_immagine %}
+        <p class="nota" data-credito>
+          {{ 'NASA' if slide.credito_immagine.fonte == 'nasa' else 'Wikimedia' }}:
+          {% if slide.credito_immagine.url %}<a href="{{ slide.credito_immagine.url }}" target="_blank" rel="noopener">{{ slide.credito_immagine.titolo[:60] }}</a>{% else %}{{ slide.credito_immagine.titolo[:60] }}{% endif %}
+          {% if slide.credito_immagine.autore %} · {{ slide.credito_immagine.autore }}{% endif %}
+        </p>
+      {% endif %}
+      <button class="btn btn-secondario btn-piccolo" style="margin-top:8px;width:100%" data-btn-ricomponi {{ '' if view.immagine_presente else 'disabled' }}>
+        Componi questa slide
+      </button>
+    </div>
+
+    <div>
+      <span class="badge badge-fase">{{ slide.fase_narrativa.replace('_', ' ') }}</span>
+      <div class="copy-preview evidenza-box" data-copy-preview style="margin-top:10px">
+        {% for seg in slide.segmenti %}{% if seg.evidenziato %}<span class="evid">{{ seg.testo }}</span>{% else %}{{ seg.testo }}{% endif %}{% endfor %}
+      </div>
+      <button class="btn btn-secondario btn-piccolo" data-btn-modifica-testo style="margin-bottom:12px">Modifica testo</button>
+
+      <div data-blocco-modifica-testo hidden style="margin-bottom:12px">
+        <textarea data-input-testo rows="4" style="margin-bottom:6px">{{ view.testo_markup }}</textarea>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 8px">
+          Usa <code>**parola**</code> per evidenziarla (bianco su rettangolino rosso).
+          <span data-contatore-testo></span>
+        </p>
+        <button class="btn btn-piccolo" data-btn-salva-testo>Salva testo</button>
+        <button class="btn btn-secondario btn-piccolo" data-btn-annulla-testo>Annulla</button>
+      </div>
+
+      <div class="ricerca-slide" data-ricerca-slide hidden>
+        <div class="riga-query">
+          <input type="text" data-query-immagine value="{{ slide.query_immagine }}" placeholder="Parola chiave in inglese (es. Saturn)">
+          <select data-fonte-immagine>
+            <option value="nasa-immagini">NASA</option>
+            <option value="wikimedia">Wikimedia Commons</option>
+          </select>
+          <button class="btn btn-piccolo" type="button" data-btn-cerca-immagine>Cerca</button>
+        </div>
+        <p class="nota">Scegli un'immagine: diventa lo sfondo con il layout foto (testo in alto, immagine sotto) e i crediti finiscono nella caption.</p>
+        <div class="griglia-media" data-risultati-immagine></div>
+        <p class="esito-verifica" data-esito-immagine></p>
+      </div>
+
+      <div class="prompt-box">{{ slide.prompt_immagine }}</div>
+      <button class="btn btn-secondario btn-piccolo" data-btn-copia data-prompt="{{ slide.prompt_immagine }}">Copia prompt Nano Banana</button>
+
+      <div data-qa-container>
+        {% if view.qa %}
+          {% set sotto_soglia = view.qa.punteggio_medio < soglia %}
+          <div class="qa-box" style="{{ 'border-color: var(--coral)' if sotto_soglia else '' }}">
+            <span class="qa-media" style="color: {{ 'var(--coral)' if sotto_soglia else 'var(--verde)' }}">
+              {{ view.qa.punteggio_medio }}/10
+            </span>
+            {% if sotto_soglia %}<span class="badge badge-avviso" style="margin-left:8px">Sotto soglia ({{ soglia }})</span>{% endif %}
+            <div class="qa-punteggi">
+              <span class="qa-punteggio">Leggibilità {{ view.qa.leggibilita_testo }}</span>
+              <span class="qa-punteggio">Contrasto {{ view.qa.contrasto }}</span>
+              <span class="qa-punteggio">Bilanciamento {{ view.qa.bilanciamento_visivo }}</span>
+              <span class="qa-punteggio">Design system {{ view.qa.aderenza_design_system }}</span>
+              <span class="qa-punteggio">Estetica {{ view.qa.qualita_estetica_generale }}</span>
+            </div>
+            {% if view.qa.commento %}<p style="margin:8px 0 0;color:var(--muted)">{{ view.qa.commento }}</p>{% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endfor %}
+
+<div class="pannello">
+  <h2>Caption per Instagram</h2>
+  {% if not ha_testo_originale %}
+    <p class="sottotitolo" style="margin-bottom:0">
+      Non disponibile per questo carosello: è stato creato con una versione precedente
+      dell'app che non salvava il testo originale della ricerca.
+    </p>
+  {% else %}
+    <div class="campo">
+      <label for="autore">Nome autore</label>
+      <input type="text" id="autore" placeholder="es. Mario Rossi">
+    </div>
+    <button class="btn" id="btn-genera-caption">
+      {{ 'Rigenera caption' if caption_esistente else 'Genera caption' }}
+    </button>
+    <div id="blocco-caption" {{ '' if caption_esistente else 'hidden' }} style="margin-top:16px">
+      <div class="caption-box" id="testo-caption">{{ caption_esistente or '' }}</div>
+      <button class="btn btn-secondario btn-piccolo" id="btn-copia-caption">Copia caption</button>
+      <p id="contatore-caption" style="font-size:0.8rem;margin:8px 0 0;color:{{ 'var(--coral)' if caption_esistente and caption_esistente|length > limite_caption else 'var(--muted)' }}">
+        {% if caption_esistente %}
+          {{ caption_esistente|length }}/{{ limite_caption }} caratteri
+          {{ '(sopra il limite)' if caption_esistente|length > limite_caption else '' }}
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+</div>
+
+<div class="barra-azioni">
+  <button class="btn" id="btn-componi-tutte" {{ '' if tutte_presenti else 'disabled' }}>Componi tutte le slide</button>
+  <a class="btn btn-secondario" href="{{ url_for('scarica_output', nome=carosello.nome_carosello) }}">Scarica ZIP output</a>
+  <a class="btn btn-secondario" href="{{ url_for('home') }}">Torna ai caroselli</a>
+  <button class="btn btn-secondario btn-pericolo" id="btn-elimina-carosello" style="margin-left:auto">Elimina carosello</button>
+</div>
+
+<div class="spinner-overlay" id="overlay-attesa">
+  <div class="spinner"></div>
+  <p id="testo-overlay">Analisi dello sfondo, composizione e controllo qualità in corso...<br>Può richiedere circa un minuto.</p>
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script src="{{ url_for('static', filename='reel.js') }}"></script>
+<script>
+  const nomeCarosello = {{ carosello.nome_carosello | tojson }};
+  const limiteSlide = {{ limite_slide | tojson }};
+  const overlay = document.getElementById("overlay-attesa");
+  const testoOverlay = document.getElementById("testo-overlay");
+
+  function mostraOverlay(testo) {
+    testoOverlay.innerHTML = testo;
+    overlay.classList.add("attivo");
+  }
+
+  function urlImmagineInput(numero) {
+    return `/file/input/${nomeCarosello}/${numero}.png`;
+  }
+
+  function aggiornaBottoneGlobale() {
+    const tutte = document.querySelectorAll("[data-slide-card]");
+    const tutteComplete = Array.from(tutte).every((el) => el.dataset.presente === "1");
+    document.getElementById("btn-componi-tutte").disabled = !tutteComplete;
+  }
+
+  // ---------------------------------------------------------------- immagini pubbliche
+  function escapeHtml(testo) {
+    const div = document.createElement("div");
+    div.textContent = testo || "";
+    return div.innerHTML;
+  }
+
+  async function cercaImmagine(card) {
+    const numero = card.dataset.numero;
+    const q = card.querySelector("[data-query-immagine]").value.trim();
+    const fonte = card.querySelector("[data-fonte-immagine]").value;
+    const griglia = card.querySelector("[data-risultati-immagine]");
+    const esito = card.querySelector("[data-esito-immagine]");
+    if (!q) return;
+    griglia.innerHTML = "";
+    esito.textContent = "Ricerca in corso...";
+    esito.style.color = "var(--muted)";
+    let dati;
+    try {
+      dati = await (await fetch(`/api/reel/cerca-media?q=${encodeURIComponent(q)}&fonte=${fonte}`)).json();
+    } catch (e) {
+      dati = { ok: false, messaggio: "Errore di rete." };
+    }
+    if (!dati.ok) {
+      esito.textContent = dati.messaggio;
+      esito.style.color = "#ff8b83";
+      return;
+    }
+    esito.textContent = dati.risultati.length ? "" : "Nessun risultato: prova un'altra parola o l'altra fonte.";
+    dati.risultati.forEach((r) => {
+      const el = document.createElement("div");
+      el.className = "card-media";
+      el.title = [r.titolo, r.autore, r.licenza].filter(Boolean).join(" · ");
+      el.innerHTML = `
+        <div class="card-media-img"><img src="${escapeHtml(r.anteprima_url)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>
+        <div class="card-media-testo">
+          <span class="card-media-titolo">${escapeHtml(r.titolo)}</span>
+          <span class="card-media-meta">${escapeHtml([r.autore, r.larghezza ? `${r.larghezza}×${r.altezza}` : ""].filter(Boolean).join(" · "))}</span>
+        </div>`;
+      el.addEventListener("click", async () => {
+        esito.textContent = "Download dell'immagine...";
+        esito.style.color = "var(--muted)";
+        const risposta = await chiamaApi(`/api/carosello/${nomeCarosello}/slide/${numero}/immagine-pubblica`, {
+          dati: {
+            fonte: r.fonte, riferimento: r.riferimento, titolo: r.titolo,
+            autore: r.autore || "", licenza: r.licenza || "", url_origine: r.url_origine || "",
+          },
+        });
+        if (!risposta.ok) {
+          esito.textContent = risposta.messaggio;
+          esito.style.color = "#ff8b83";
+          return;
+        }
+        ricaricaMantenendoPosizione();
+      });
+      griglia.appendChild(el);
+    });
+  }
+
+  document.querySelectorAll("[data-slide-card]").forEach((card) => {
+    const pannello = card.querySelector("[data-ricerca-slide]");
+    const inputQuery = card.querySelector("[data-query-immagine]");
+    card.querySelector("[data-btn-apri-ricerca]").addEventListener("click", () => {
+      pannello.hidden = !pannello.hidden;
+      if (!pannello.hidden && !card.querySelector("[data-risultati-immagine]").children.length) cercaImmagine(card);
+    });
+    card.querySelector("[data-btn-cerca-immagine]").addEventListener("click", () => cercaImmagine(card));
+    card.querySelector("[data-fonte-immagine]").addEventListener("change", () => cercaImmagine(card));
+    inputQuery.addEventListener("keydown", (e) => e.key === "Enter" && cercaImmagine(card));
+    inputQuery.addEventListener("change", () =>
+      chiamaApi(`/api/carosello/${nomeCarosello}/slide/${card.dataset.numero}/query`, { dati: { query: inputQuery.value } })
+    );
+    card.querySelector("[data-tipo-foto]").addEventListener("change", async (e) => {
+      const risposta = await chiamaApi(`/api/carosello/${nomeCarosello}/slide/${card.dataset.numero}/tipo-sfondo`, {
+        dati: { tipo: e.target.checked ? "foto" : "illustrazione" },
+      });
+      if (!risposta.ok) return alert(risposta.messaggio);
+      ricaricaMantenendoPosizione(); // la slide composta non vale più: va ricomposta
+    });
+  });
+
+  // Parole chiave compilate in automatico (una sola chiamata Gemini) se qualche slide non ne ha.
+  if ([...document.querySelectorAll("[data-query-immagine]")].some((i) => !i.value.trim())) {
+    chiamaApi(`/api/carosello/${nomeCarosello}/query-immagini`, { dati: { solo_vuote: "1" } }).then((risposta) => {
+      if (!risposta.ok) return;
+      document.querySelectorAll("[data-slide-card]").forEach((card) => {
+        const input = card.querySelector("[data-query-immagine]");
+        const q = risposta.query[card.dataset.numero];
+        if (q && !input.value.trim()) input.value = q;
+      });
+    });
+  }
+
+  document.querySelectorAll("[data-input-immagine]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      if (!input.files.length) return;
+      const card = input.closest("[data-slide-card]");
+      const numero = card.dataset.numero;
+
+      const formData = new FormData();
+      formData.append("immagine", input.files[0]);
+
+      try {
+        const resp = await fetch(`/api/carosello/${nomeCarosello}/slide/${numero}/immagine`, {
+          method: "POST",
+          body: formData,
+        });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        const mini = card.querySelector("[data-mini-slide]");
+        mini.innerHTML = `<img src="${urlImmagineInput(numero)}?t=${Date.now()}" alt="Sfondo slide ${numero}">`;
+        card.querySelector("[data-dropzone-testo]").textContent = "Sostituisci immagine";
+        card.querySelector("[data-btn-ricomponi]").disabled = false;
+        card.dataset.presente = "1";
+        aggiornaBottoneGlobale();
+      } catch (e) {
+        alert("Errore di rete durante il caricamento dell'immagine.");
+      }
+    });
+  });
+
+  function aggiornaContatoreTesto(card) {
+    const testo = card.querySelector("[data-input-testo]").value;
+    const testoSenzaMarkup = testo.replace(/\*\*/g, "");
+    const parole = testoSenzaMarkup.trim() ? testoSenzaMarkup.trim().split(/\s+/).length : 0;
+    const caratteri = testoSenzaMarkup.length;
+    const contatore = card.querySelector("[data-contatore-testo]");
+    contatore.textContent = `${parole} parole · ${caratteri}/${limiteSlide} caratteri`;
+    contatore.style.color = caratteri > limiteSlide ? "var(--coral)" : "var(--muted)";
+  }
+
+  document.querySelectorAll("[data-btn-modifica-testo]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest("[data-slide-card]");
+      card.querySelector("[data-copy-preview]").hidden = true;
+      btn.hidden = true;
+      card.querySelector("[data-blocco-modifica-testo]").hidden = false;
+      aggiornaContatoreTesto(card);
+      card.querySelector("[data-input-testo]").focus();
+    });
+  });
+
+  document.querySelectorAll("[data-input-testo]").forEach((textarea) => {
+    textarea.dataset.originale = textarea.value;
+    textarea.addEventListener("input", () => aggiornaContatoreTesto(textarea.closest("[data-slide-card]")));
+  });
+
+  document.querySelectorAll("[data-btn-annulla-testo]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest("[data-slide-card]");
+      const textarea = card.querySelector("[data-input-testo]");
+      textarea.value = textarea.dataset.originale;
+      card.querySelector("[data-blocco-modifica-testo]").hidden = true;
+      card.querySelector("[data-copy-preview]").hidden = false;
+      card.querySelector("[data-btn-modifica-testo]").hidden = false;
+    });
+  });
+
+  document.querySelectorAll("[data-btn-salva-testo]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest("[data-slide-card]");
+      const numero = card.dataset.numero;
+      const testo = card.querySelector("[data-input-testo]").value;
+
+      const formData = new FormData();
+      formData.append("testo", testo);
+
+      try {
+        const resp = await fetch(`/api/carosello/${nomeCarosello}/slide/${numero}/testo`, {
+          method: "POST",
+          body: formData,
+        });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        alert("Errore di rete durante il salvataggio del testo.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-btn-copia]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(btn.dataset.prompt);
+      const originale = btn.textContent;
+      btn.textContent = "Copiato!";
+      setTimeout(() => (btn.textContent = originale), 1500);
+    });
+  });
+
+  document.querySelectorAll("[data-btn-ricomponi]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest("[data-slide-card]");
+      const numero = card.dataset.numero;
+      mostraOverlay(`Composizione e controllo qualità della slide ${numero} in corso...`);
+      try {
+        const resp = await fetch(`/api/carosello/${nomeCarosello}/slide/${numero}/ricomponi`, {
+          method: "POST",
+        });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          overlay.classList.remove("attivo");
+          alert(dati.messaggio);
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        overlay.classList.remove("attivo");
+        alert("Errore di rete durante la composizione.");
+      }
+    });
+  });
+
+  document.getElementById("btn-componi-tutte").addEventListener("click", async () => {
+    mostraOverlay("Composizione e controllo qualità di tutte le slide in corso...<br>Può richiedere qualche minuto.");
+    try {
+      const resp = await fetch(`/api/carosello/${nomeCarosello}/componi`, { method: "POST" });
+      const dati = await resp.json();
+      if (!dati.ok) {
+        overlay.classList.remove("attivo");
+        alert(dati.messaggio);
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      overlay.classList.remove("attivo");
+      alert("Errore di rete durante la composizione.");
+    }
+  });
+
+  const btnGeneraCaption = document.getElementById("btn-genera-caption");
+  if (btnGeneraCaption) {
+    btnGeneraCaption.addEventListener("click", async () => {
+      const autore = document.getElementById("autore").value;
+      mostraOverlay("Generazione della caption in corso...");
+      try {
+        const formData = new FormData();
+        formData.append("autore", autore);
+        const resp = await fetch(`/api/carosello/${nomeCarosello}/caption`, {
+          method: "POST",
+          body: formData,
+        });
+        const dati = await resp.json();
+        overlay.classList.remove("attivo");
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        document.getElementById("testo-caption").textContent = dati.caption;
+        document.getElementById("blocco-caption").hidden = false;
+        btnGeneraCaption.textContent = "Rigenera caption";
+
+        const contatore = document.getElementById("contatore-caption");
+        const sopraLimite = dati.lunghezza > dati.limite;
+        contatore.textContent = `${dati.lunghezza}/${dati.limite} caratteri${sopraLimite ? " (sopra il limite)" : ""}`;
+        contatore.style.color = sopraLimite ? "var(--coral)" : "var(--muted)";
+      } catch (e) {
+        overlay.classList.remove("attivo");
+        alert("Errore di rete durante la generazione della caption.");
+      }
+    });
+  }
+
+  const btnCopiaCaption = document.getElementById("btn-copia-caption");
+  if (btnCopiaCaption) {
+    btnCopiaCaption.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(document.getElementById("testo-caption").textContent);
+      const originale = btnCopiaCaption.textContent;
+      btnCopiaCaption.textContent = "Copiato!";
+      setTimeout(() => (btnCopiaCaption.textContent = originale), 1500);
+    });
+  }
+
+  document.getElementById("btn-elimina-carosello").addEventListener("click", async () => {
+    if (!confirm(`Eliminare definitivamente "${nomeCarosello}"? Prompt, immagini caricate e output verranno cancellati. L'azione non è reversibile.`)) {
+      return;
+    }
+    try {
+      const resp = await fetch(`/api/carosello/${nomeCarosello}`, { method: "DELETE" });
+      const dati = await resp.json();
+      if (!dati.ok) {
+        alert(dati.messaggio);
+        return;
+      }
+      window.location.href = "{{ url_for('home') }}";
+    } catch (e) {
+      alert("Errore di rete durante l'eliminazione.");
+    }
+  });
+</script>
+{% endblock %}

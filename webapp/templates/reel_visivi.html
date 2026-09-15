@@ -1,0 +1,723 @@
+{% extends "base.html" %}
+{% block titolo %}Visivi — {{ reel.nome_reel }}{% endblock %}
+
+{% macro url_media(file) %}{{ url_for('reel_prod.file_reel', nome=reel.nome_reel, tipo='media', file=file) }}{% endmacro %}
+
+{% block contenuto %}
+<h1>{{ reel.nome_reel }}</h1>
+<p class="sottotitolo" style="margin-bottom:16px">Scegli cosa si vede mentre parli.</p>
+{% include "_passi_reel.html" %}
+
+<div class="pannello">
+  <div class="segmento-intestazione">
+    <h2 style="margin:0">Timeline</h2>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-suggerisci-query">Rigenera le ricerche con AI</button>
+  </div>
+  <p class="sottotitolo" style="margin:10px 0 18px">
+    Seleziona una parte, poi clicca un elemento della libreria per assegnarlo. Con "continua" la parte
+    prosegue lo stesso visivo della precedente, senza tagli. Le immagini hanno sempre uno zoom lento.
+  </p>
+
+  {% for view in segmenti_view %}
+    {% set s = view.segmento %}
+    {% set continua = view.stato.continua_precedente and not view.primo %}
+    {% set asset = view.asset %}
+    {% set orizzontale = asset and asset.larghezza / asset.altezza > rapporto_orizzontale %}
+    {% set riempi = orizzontale and view.stato.riempi_schermo %}
+    {% set stile_inquadratura = ('object-fit:cover;object-position:' ~ (view.stato.inquadratura_x * 100) | round(1) ~ '% 50%') if riempi else ('object-fit:contain' if orizzontale else '') %}
+    <div class="segmento-visivo {{ 'continuazione' if continua }}" data-segmento="{{ s.chiave }}"
+         data-senza-visivo="{{ '1' if not continua and not asset else '0' }}" data-continua="{{ '1' if continua else '0' }}">
+      <div class="miniatura-segmento">
+        {% if continua %}
+          <span class="placeholder">↑ continua</span>
+        {% elif asset %}
+          <img src="{{ url_media(asset.anteprima) }}" alt="" data-miniatura style="{{ stile_inquadratura }}">
+          {% if asset.tipo == 'video' %}<span class="badge-miniatura">VIDEO</span>{% endif %}
+        {% else %}
+          <span class="placeholder">Nessun visivo</span>
+        {% endif %}
+      </div>
+
+      <div class="corpo-segmento">
+        <div class="segmento-intestazione">
+          <strong>{{ s.etichetta }}</strong>
+          <span class="durata-segmento">{{ '~' if view.durata_stimata }}{{ view.durata }}{{ ' (stimata)' if view.durata_stimata }}</span>
+        </div>
+        <p class="testo-segmento">{{ s.testo }}</p>
+
+        {% if not view.primo %}
+          <label class="spunta">
+            <input type="checkbox" data-continua {{ 'checked' if continua }}>
+            Continua il visivo della parte precedente
+          </label>
+        {% endif %}
+
+        {% if not continua %}
+          <div class="riga-query">
+            <input type="text" data-query value="{{ view.stato.query_ricerca }}" placeholder="Cosa cercare online (in inglese rende meglio)">
+            <button class="btn btn-piccolo" type="button" data-btn-scegli>{{ 'Cambia visivo' if asset else 'Scegli visivo' }}</button>
+            {% if asset %}<button class="btn btn-secondario btn-piccolo" type="button" data-btn-togli>Togli visivo</button>{% endif %}
+          </div>
+
+          <div class="scelta-visivo" data-scelta hidden>
+            <div class="scelta-schede">
+              <button type="button" class="btn btn-piccolo" data-scheda="cerca">Cerca online</button>
+              <button type="button" class="btn btn-secondario btn-piccolo" data-scheda="libreria">Libreria ({{ produzione.asset | length }})</button>
+              <label class="btn btn-secondario btn-piccolo etichetta-file">
+                Carica file
+                <input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm,.mkv,.m4v" data-carica-file>
+              </label>
+              <span class="nota">oppure trascina un file sulla scheda</span>
+            </div>
+            <div data-pannello="cerca">
+              <div class="riga-query">
+                <select data-fonte>
+                  <option value="nasa-immagini">NASA — immagini</option>
+                  <option value="nasa-video">NASA — video</option>
+                  <option value="wikimedia">Wikimedia Commons</option>
+                </select>
+                <span class="nota">Cerca la parola scritta sopra; clicca un risultato per usarlo qui.</span>
+              </div>
+              <div class="griglia-media griglia-compatta" data-risultati></div>
+            </div>
+            <div data-pannello="libreria" hidden>
+              {% if produzione.asset %}
+                <div class="griglia-media griglia-compatta">
+                  {% for a in produzione.asset %}
+                    <button type="button" class="card-media {{ 'scelta-attuale' if asset and a.id == asset.id }}" data-usa-asset="{{ a.id }}" title="{{ a.titolo }}">
+                      <span class="card-media-img">
+                        <img src="{{ url_media(a.anteprima) }}" alt="" loading="lazy">
+                        {% if a.tipo == 'video' %}<span class="badge-miniatura">VIDEO</span>{% endif %}
+                      </span>
+                    </button>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="nota">La libreria è ancora vuota.</p>
+              {% endif %}
+            </div>
+            <p class="esito-verifica" data-esito-scelta></p>
+          </div>
+        {% endif %}
+
+        {% if not continua and orizzontale %}
+          <div class="inquadratura" data-inquadratura data-altezza="{{ asset.altezza }}">
+            <label class="spunta">
+              <input type="checkbox" data-riempi {{ 'checked' if riempi }}>
+              Riempi lo schermo (ingrandisce {{ 'il video' if asset.tipo == 'video' else "l'immagine" }} e taglia i lati)
+            </label>
+            <div data-blocco-posizione {{ '' if riempi else 'hidden' }}>
+              <label>Inquadratura: quale parte tenere</label>
+              <div class="riga-inquadratura">
+                <span class="nota">sinistra</span>
+                <input type="range" min="0" max="1" step="0.01" value="{{ view.stato.inquadratura_x }}" data-posizione-x>
+                <span class="nota">destra</span>
+              </div>
+              <p class="nota" data-avviso-sgranato hidden style="color:#ff8b83"></p>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if not continua and asset and asset.tipo == 'video' %}
+          {% set massimo = [asset.durata - view.durata_blocco, 0] | max %}
+          <div class="taglio-video" data-taglio data-durata-blocco="{{ view.durata_blocco }}" data-durata-video="{{ asset.durata }}">
+            <video muted playsinline preload="metadata" src="{{ url_media(asset.file) }}#t={{ view.stato.inizio_video }}" style="{{ stile_inquadratura }}" title="Anteprima dell'inquadratura verticale"></video>
+            <div class="taglio-controlli">
+              <label>Da che punto del video partire</label>
+              <input type="range" min="0" max="{{ '%.2f' % massimo }}" step="0.1" value="{{ [view.stato.inizio_video, massimo] | min }}" data-inizio {{ 'disabled' if massimo == 0 }}>
+              <p class="nota" data-descrizione-taglio></p>
+              {% if asset.durata < view.durata_blocco %}
+                <p class="nota" style="color:#ff8b83">
+                  Il video dura {{ '%.1f' % asset.durata }} s, meno di questa parte ({{ '%.1f' % view.durata_blocco }} s):
+                  l'ultimo fotogramma resterà fermo per il tempo che manca.
+                </p>
+              {% endif %}
+              {% if view.durata_stimata %}
+                <p class="nota">Durata stimata: registra la voce per avere quella esatta.</p>
+              {% endif %}
+              <button class="btn btn-secondario btn-piccolo" type="button" data-btn-anteprima-taglio>▶ Guarda il tratto</button>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="pannello" id="pannello-libreria">
+  <h2>Libreria</h2>
+  <p class="sottotitolo" style="margin-bottom:14px" id="suggerimento-assegna"></p>
+
+  {% if produzione.asset %}
+    <div class="griglia-media">
+      {% for a in produzione.asset %}
+        {% set lato = [a.larghezza, a.altezza] | max %}
+        <div class="card-media" data-asset="{{ a.id }}" title="{{ a.titolo }}{{ ' — ' ~ a.autore if a.autore }}">
+          <div class="card-media-img">
+            <img src="{{ url_media(a.anteprima) }}" alt="" loading="lazy">
+            {% if a.tipo == 'video' %}<span class="badge-miniatura">VIDEO {{ '%d:%02d' % (a.durata // 60, a.durata % 60) }}</span>{% endif %}
+            {% if a.tipo == 'immagine' and lato < lato_minimo %}<span class="badge-miniatura badge-bassa">Bassa risoluzione</span>{% endif %}
+            <button class="card-media-elimina" type="button" data-btn-elimina-asset title="Elimina dalla libreria">✕</button>
+          </div>
+          <div class="card-media-testo">
+            <span class="card-media-titolo">{{ a.titolo }}</span>
+            <span class="card-media-meta">
+              {{ {'nasa': 'NASA', 'wikimedia': 'Wikimedia', 'youtube': 'YouTube', 'caricato': 'Caricato'}[a.fonte] }}
+              · {{ a.larghezza }}×{{ a.altezza }}
+            </span>
+            {% if uso_asset.get(a.id) %}<span class="card-media-uso">In: {{ uso_asset[a.id] | join(', ') }}</span>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="sottotitolo">La libreria è vuota: carica file, cerca online o scarica da YouTube.</p>
+  {% endif %}
+
+  <div class="riga-aggiunta">
+    <label class="dropzone dropzone-grande" id="dropzone-media">
+      Trascina qui immagini o video, oppure clicca per sceglierli
+      <input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm,.mkv,.m4v" id="input-media">
+    </label>
+    <div class="blocco-youtube">
+      <label for="url-youtube">Video da YouTube</label>
+      <div class="riga-query">
+        <input type="text" id="url-youtube" placeholder="https://www.youtube.com/watch?v=...">
+        <button class="btn btn-secondario btn-piccolo" type="button" id="btn-youtube">Scarica</button>
+      </div>
+      <p class="nota">
+        Usa solo video che puoi riutilizzare (tuoi, con licenza Creative Commons o con il permesso
+        dell'autore): i crediti finiscono in caption in automatico, ma non sostituiscono il permesso.
+        Dopo il download scegli qui sopra il tratto da usare.
+      </p>
+    </div>
+  </div>
+  <div id="lavori-attivi"></div>
+</div>
+
+<div class="pannello" id="pannello-ricerca">
+  <h2>Cerca online</h2>
+  <div class="riga-query">
+    <input type="text" id="query-ricerca" placeholder="es. rocket launch night">
+    <select id="fonte-ricerca">
+      <option value="nasa-immagini">NASA — immagini</option>
+      <option value="nasa-video">NASA — video</option>
+      <option value="wikimedia">Wikimedia Commons — immagini</option>
+    </select>
+    <button class="btn btn-piccolo" type="button" id="btn-cerca">Cerca</button>
+  </div>
+  <p class="nota" id="destinazione-ricerca"></p>
+  <div class="griglia-media" id="risultati-ricerca"></div>
+  <p class="esito-verifica" id="esito-ricerca"></p>
+</div>
+
+<div class="barra-azioni">
+  <a class="btn btn-secondario" href="{{ url_for('reel_prod.registrazione', nome=reel.nome_reel) }}">← Registrazione</a>
+  <a class="btn" href="{{ url_for('reel_prod.montaggio', nome=reel.nome_reel) }}">Avanti: montaggio →</a>
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script src="{{ url_for('static', filename='reel.js') }}"></script>
+<script>
+  const nomeReel = {{ reel.nome_reel | tojson }};
+  const chiaveMemoria = `visivi:${nomeReel}`;
+  const card = [...document.querySelectorAll(".segmento-visivo")];
+
+  function leggiMemoria() {
+    try {
+      return JSON.parse(sessionStorage.getItem(chiaveMemoria)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function scriviMemoria(valori) {
+    try {
+      sessionStorage.setItem(chiaveMemoria, JSON.stringify({ ...leggiMemoria(), ...valori }));
+    } catch (e) {}
+  }
+
+  // ------------------------------------------------------------ parte attiva
+  let attivo = null;
+  function etichetta(chiave) {
+    const el = document.querySelector(`[data-segmento="${chiave}"] strong`);
+    return el ? el.textContent : chiave;
+  }
+  function selezionaSegmento(chiave) {
+    const el = card.find((c) => c.dataset.segmento === chiave && c.dataset.continua === "0");
+    if (!el) return;
+    attivo = chiave;
+    card.forEach((c) => c.classList.toggle("attivo", c === el));
+    document.getElementById("suggerimento-assegna").textContent =
+      `Clicca un elemento per assegnarlo a: ${etichetta(chiave)}.`;
+    document.getElementById("destinazione-ricerca").textContent =
+      `Gli elementi importati verranno assegnati a: ${etichetta(chiave)}.`;
+    scriviMemoria({ attivo: chiave });
+  }
+  function prossimoSenzaVisivo(dopo) {
+    const indice = card.findIndex((c) => c.dataset.segmento === dopo);
+    const successivo = card.slice(indice + 1).find((c) => c.dataset.senzaVisivo === "1");
+    return successivo ? successivo.dataset.segmento : null;
+  }
+
+  card.forEach((c) => {
+    c.addEventListener("click", (e) => {
+      if (e.target.closest("input, button, video, label")) return;
+      selezionaSegmento(c.dataset.segmento);
+    });
+  });
+  {
+    const memoria = leggiMemoria();
+    const primoSenza = card.find((c) => c.dataset.senzaVisivo === "1");
+    selezionaSegmento(memoria.attivo || (primoSenza ? primoSenza.dataset.segmento : card[0].dataset.segmento));
+    if (!attivo) selezionaSegmento(card[0].dataset.segmento);
+  }
+
+  // ------------------------------------------------------------ cambio visivo dalla scheda
+  // Tutto dentro la scheda della parte: cerca, libreria, carica o trascina un file.
+  // Il nuovo visivo sostituisce quello attuale e la pagina si ricarica sulla stessa scheda.
+  function dopoAssegnazione(chiave) {
+    scriviMemoria({ attivo: chiave, scorriA: chiave });
+    ricaricaMantenendoPosizione();
+  }
+
+  async function caricaSuParte(c, chiave, file) {
+    const pannello = c.querySelector("[data-scelta]");
+    const esito = pannello.querySelector("[data-esito-scelta]");
+    pannello.hidden = false;
+    esito.textContent = `Caricamento di ${file.name}...`;
+    esito.style.color = "var(--muted)";
+    const dati = new FormData();
+    dati.append("file", file);
+    dati.append("assegna_a", chiave);
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/media/carica`, { dati });
+    if (!risposta.ok) return alert(risposta.messaggio);
+    dopoAssegnazione(chiave);
+  }
+
+  function collegaSceltaVisivo(c, chiave, query) {
+    const pannello = c.querySelector("[data-scelta]");
+    const risultati = pannello.querySelector("[data-risultati]");
+    const esito = pannello.querySelector("[data-esito-scelta]");
+
+    const mostraScheda = (nome) => {
+      pannello.querySelectorAll("[data-pannello]").forEach((p) => (p.hidden = p.dataset.pannello !== nome));
+      pannello.querySelectorAll("[data-scheda]").forEach((b) => b.classList.toggle("btn-secondario", b.dataset.scheda !== nome));
+    };
+
+    const cercaQui = async () => {
+      const q = query.value.trim();
+      if (!q) {
+        esito.textContent = "Scrivi cosa cercare nel campo qui sopra.";
+        return;
+      }
+      mostraScheda("cerca");
+      risultati.innerHTML = "";
+      esito.textContent = "Ricerca in corso...";
+      esito.style.color = "var(--muted)";
+      let dati;
+      try {
+        dati = await (await fetch(`/api/reel/cerca-media?q=${encodeURIComponent(q)}&fonte=${pannello.querySelector("[data-fonte]").value}`)).json();
+      } catch (e) {
+        dati = { ok: false, messaggio: "Errore di rete." };
+      }
+      if (!dati.ok) {
+        esito.textContent = dati.messaggio;
+        esito.style.color = "#ff8b83";
+        return;
+      }
+      esito.textContent = dati.risultati.length ? "" : "Nessun risultato: prova un'altra parola o un'altra fonte.";
+      dati.risultati.forEach((r) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "card-media";
+        el.title = [r.titolo, r.autore, r.licenza].filter(Boolean).join(" · ");
+        el.innerHTML = `<span class="card-media-img"><img src="${escapeHtml(r.anteprima_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">${r.tipo === "video" ? '<span class="badge-miniatura">VIDEO</span>' : ""}</span>`;
+        el.addEventListener("click", async () => {
+          esito.textContent = r.tipo === "video" ? "Download del video (può richiedere un po')..." : "Download dell'immagine...";
+          esito.style.color = "var(--muted)";
+          const risposta = await chiamaApi(`/api/reel/${nomeReel}/media/importa`, {
+            dati: {
+              fonte: r.fonte, tipo: r.tipo, titolo: r.titolo, anteprima_url: r.anteprima_url || "",
+              riferimento: r.riferimento, autore: r.autore || "", licenza: r.licenza || "",
+              url_origine: r.url_origine || "", assegna_a: chiave,
+            },
+          });
+          if (!risposta.ok) {
+            esito.textContent = risposta.messaggio;
+            esito.style.color = "#ff8b83";
+            return;
+          }
+          const lavoro = await seguiLavoro(risposta.chiave, (l) => (esito.textContent = l.fase + "..."));
+          if (lavoro.stato !== "completato") {
+            esito.textContent = lavoro.messaggio;
+            esito.style.color = "#ff8b83";
+            return;
+          }
+          dopoAssegnazione(chiave);
+        });
+        risultati.appendChild(el);
+      });
+    };
+
+    c.querySelector("[data-btn-scegli]").addEventListener("click", () => {
+      pannello.hidden = !pannello.hidden;
+      selezionaSegmento(chiave);
+      if (!pannello.hidden && !risultati.children.length) cercaQui();
+    });
+    query.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      pannello.hidden = false;
+      cercaQui();
+    });
+    pannello.querySelector("[data-scheda='cerca']").addEventListener("click", cercaQui);
+    pannello.querySelector("[data-scheda='libreria']").addEventListener("click", () => mostraScheda("libreria"));
+    pannello.querySelector("[data-fonte]").addEventListener("change", cercaQui);
+    pannello.querySelectorAll("[data-usa-asset]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        if (await impostaVisivo(chiave, { asset_id: el.dataset.usaAsset, continua_precedente: "0" })) dopoAssegnazione(chiave);
+      });
+    });
+    pannello.querySelector("[data-carica-file]").addEventListener("change", (e) => {
+      if (e.target.files[0]) caricaSuParte(c, chiave, e.target.files[0]);
+    });
+
+    // Trascinando un file sulla scheda lo si carica e lo si usa per questa parte.
+    c.addEventListener("dragover", (e) => {
+      if (![...e.dataTransfer.types].includes("Files")) return;
+      e.preventDefault();
+      c.classList.add("trascinamento");
+    });
+    c.addEventListener("dragleave", (e) => {
+      if (!c.contains(e.relatedTarget)) c.classList.remove("trascinamento");
+    });
+    c.addEventListener("drop", (e) => {
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault();
+      c.classList.remove("trascinamento");
+      caricaSuParte(c, chiave, e.dataTransfer.files[0]);
+    });
+  }
+
+  async function impostaVisivo(chiave, dati) {
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/segmento/${chiave}/visivo`, { dati });
+    if (!risposta.ok) alert(risposta.messaggio);
+    return risposta.ok;
+  }
+
+  // ------------------------------------------------------------ timeline
+  card.forEach((c) => {
+    const chiave = c.dataset.segmento;
+    const continua = c.querySelector("[data-continua]");
+    if (continua) {
+      continua.addEventListener("change", async () => {
+        if (await impostaVisivo(chiave, { continua_precedente: continua.checked ? "1" : "0" })) {
+          ricaricaMantenendoPosizione();
+        }
+      });
+    }
+    const togli = c.querySelector("[data-btn-togli]");
+    if (togli) {
+      togli.addEventListener("click", async () => {
+        if (await impostaVisivo(chiave, { asset_id: "" })) ricaricaMantenendoPosizione();
+      });
+    }
+    const query = c.querySelector("[data-query]");
+    if (query) {
+      query.addEventListener("change", () => impostaVisivo(chiave, { query_ricerca: query.value }));
+      collegaSceltaVisivo(c, chiave, query);
+    }
+
+    const inquadratura = c.querySelector("[data-inquadratura]");
+    if (inquadratura) {
+      const riempi = inquadratura.querySelector("[data-riempi]");
+      const posizione = inquadratura.querySelector("[data-posizione-x]");
+      // Anteprima dal vivo sulla miniatura e sul video: stesso taglio del montaggio.
+      const aggiornaAnteprima = () => {
+        const stile = riempi.checked
+          ? { objectFit: "cover", objectPosition: `${Number(posizione.value) * 100}% 50%` }
+          : { objectFit: "contain", objectPosition: "50% 50%" };
+        c.querySelectorAll("[data-miniatura], [data-taglio] video").forEach((el) => Object.assign(el.style, stile));
+        inquadratura.querySelector("[data-blocco-posizione]").hidden = !riempi.checked;
+        // A tutto schermo l'altezza del visivo diventa quella del reel (1920 px).
+        const ingrandimento = 1920 / Number(inquadratura.dataset.altezza);
+        const avviso = inquadratura.querySelector("[data-avviso-sgranato]");
+        avviso.hidden = !(riempi.checked && ingrandimento > 1.8);
+        avviso.textContent = `Ingrandimento ${ingrandimento.toFixed(1)}×: con questa risoluzione (${inquadratura.dataset.altezza} px di altezza) si vedrà sgranato.`;
+      };
+      aggiornaAnteprima();
+      riempi.addEventListener("change", () => {
+        aggiornaAnteprima();
+        impostaVisivo(chiave, { riempi_schermo: riempi.checked ? "1" : "0" });
+      });
+      posizione.addEventListener("input", aggiornaAnteprima);
+      posizione.addEventListener("change", () => impostaVisivo(chiave, { inquadratura_x: posizione.value }));
+    }
+
+    const taglio = c.querySelector("[data-taglio]");
+    if (taglio) {
+      const video = taglio.querySelector("video");
+      const cursore = taglio.querySelector("[data-inizio]");
+      const descrizione = taglio.querySelector("[data-descrizione-taglio]");
+      const durataBlocco = Number(taglio.dataset.durataBlocco);
+      const durataVideo = Number(taglio.dataset.durataVideo);
+      let fine = 0;
+
+      const descrivi = () => {
+        const inizio = Number(cursore.value);
+        fine = Math.min(inizio + durataBlocco, durataVideo);
+        descrizione.textContent = `Si vede da ${formattaSecondi(inizio)} a ${formattaSecondi(fine)} del video (${formattaSecondi(durataVideo)} in tutto).`;
+      };
+      descrivi();
+      cursore.addEventListener("input", () => {
+        descrivi();
+        video.pause();
+        video.currentTime = Number(cursore.value);
+      });
+      cursore.addEventListener("change", () => impostaVisivo(chiave, { inizio_video: cursore.value }));
+      taglio.querySelector("[data-btn-anteprima-taglio]").addEventListener("click", () => {
+        video.currentTime = Number(cursore.value);
+        video.play();
+      });
+      video.addEventListener("timeupdate", () => {
+        if (!video.paused && video.currentTime >= fine) {
+          video.pause();
+          video.currentTime = Number(cursore.value);
+        }
+      });
+    }
+  });
+
+  // Compila i campi di ricerca con le parole chiave suggerite da Gemini. In automatico
+  // (all'apertura, se ce ne sono di vuoti) riempie solo quelli vuoti, senza ricaricare.
+  async function compilaRicerche(soloVuote) {
+    const btn = document.getElementById("btn-suggerisci-query");
+    const testoOriginale = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Preparo le ricerche...";
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/visivi/suggerisci-query`, { dati: { solo_vuote: soloVuote ? "1" : "0" } });
+    btn.disabled = false;
+    btn.textContent = testoOriginale;
+    if (!risposta.ok) {
+      if (!soloVuote) alert(risposta.messaggio);
+      return;
+    }
+    card.forEach((c) => {
+      const input = c.querySelector("[data-query]");
+      if (input && risposta.query[c.dataset.segmento] !== undefined) input.value = risposta.query[c.dataset.segmento];
+    });
+    // Parte subito la ricerca per la parte selezionata, se il pannello è ancora vuoto.
+    const campoRicerca = document.getElementById("query-ricerca");
+    const attiva = attivo && document.querySelector(`[data-segmento="${attivo}"] [data-query]`);
+    if (attiva && (!soloVuote || !campoRicerca.value)) {
+      campoRicerca.value = attiva.value;
+      cerca();
+    }
+  }
+
+  document.getElementById("btn-suggerisci-query").addEventListener("click", () => compilaRicerche(false));
+  if ([...document.querySelectorAll("[data-query]")].some((input) => !input.value.trim())) {
+    compilaRicerche(true);
+  }
+
+  // ------------------------------------------------------------ libreria
+  document.querySelectorAll("[data-asset]").forEach((el) => {
+    el.addEventListener("click", async (e) => {
+      const assetId = el.dataset.asset;
+      if (e.target.closest("[data-btn-elimina-asset]")) {
+        const uso = el.querySelector(".card-media-uso");
+        const avviso = uso ? `\nÈ usato in: ${uso.textContent.replace("In: ", "")}.` : "";
+        if (!confirm("Eliminare questo elemento dalla libreria?" + avviso)) return;
+        const risposta = await chiamaApi(`/api/reel/${nomeReel}/media/${assetId}`, { metodo: "DELETE" });
+        if (!risposta.ok) return alert(risposta.messaggio);
+        ricaricaMantenendoPosizione();
+        return;
+      }
+      if (!attivo) return;
+      if (await impostaVisivo(attivo, { asset_id: assetId, continua_precedente: "0" })) {
+        scriviMemoria({ attivo: prossimoSenzaVisivo(attivo) || attivo });
+        ricaricaMantenendoPosizione();
+      }
+    });
+  });
+
+  // ------------------------------------------------------------ lavori (import, YouTube)
+  const contenitoreLavori = document.getElementById("lavori-attivi");
+  let lavoriInCorso = 0;
+
+  // `scorriA`: parte da mostrare dopo il reload (per scegliere subito il tratto di un video).
+  async function seguiConRiga(chiave, titolo, scorriA) {
+    const riga = document.createElement("div");
+    riga.className = "riga-lavoro";
+    riga.innerHTML = `<span>${titolo}</span><div class="barra-progresso"><div style="width:5%"></div></div><span class="nota"></span>`;
+    contenitoreLavori.appendChild(riga);
+    lavoriInCorso += 1;
+    const esito = await seguiLavoro(chiave, (lavoro) => {
+      riga.querySelector(".nota").textContent = lavoro.fase;
+      riga.querySelector(".barra-progresso > div").style.width = `${Math.max(5, lavoro.avanzamento * 100)}%`;
+    });
+    lavoriInCorso -= 1;
+    if (esito.stato !== "completato") {
+      riga.querySelector(".nota").textContent = esito.messaggio;
+      riga.querySelector(".nota").style.color = "#ff8b83";
+      riga.querySelector(".barra-progresso").remove();
+      return;
+    }
+    riga.remove();
+    if (scorriA) scriviMemoria({ scorriA });
+    if (lavoriInCorso === 0) ricaricaMantenendoPosizione();
+  }
+
+  async function caricaFile(files) {
+    let errori = 0;
+    for (const file of files) {
+      const dati = new FormData();
+      dati.append("file", file);
+      if (attivo) dati.append("assegna_a", attivo);
+      const riga = document.createElement("div");
+      riga.className = "riga-lavoro";
+      riga.innerHTML = `<span>${file.name}</span><span class="nota">Caricamento...</span>`;
+      contenitoreLavori.appendChild(riga);
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/media/carica`, { dati });
+      if (!risposta.ok) {
+        riga.querySelector(".nota").textContent = risposta.messaggio;
+        riga.querySelector(".nota").style.color = "#ff8b83";
+        errori += 1;
+        continue;
+      }
+      riga.remove();
+      // Con più file solo il primo va alla parte attiva: gli altri restano in libreria.
+      if (attivo) {
+        scriviMemoria({ attivo: prossimoSenzaVisivo(attivo) || attivo });
+        attivo = null;
+      }
+    }
+    if (errori === 0 && lavoriInCorso === 0) ricaricaMantenendoPosizione();
+  }
+
+  const inputMedia = document.getElementById("input-media");
+  const dropzone = document.getElementById("dropzone-media");
+  inputMedia.addEventListener("change", () => caricaFile([...inputMedia.files]));
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("sopra");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("sopra"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("sopra");
+    caricaFile([...e.dataTransfer.files]);
+  });
+
+  document.getElementById("btn-youtube").addEventListener("click", async () => {
+    const input = document.getElementById("url-youtube");
+    const url = input.value.trim();
+    if (!url) return;
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/media/youtube`, { dati: { url, assegna_a: attivo || "" } });
+    if (!risposta.ok) return alert(risposta.messaggio);
+    input.value = "";
+    seguiConRiga(risposta.chiave, "YouTube", attivo);
+  });
+
+  // Dopo un reload riprende a seguire un download YouTube ancora in corso.
+  (async () => {
+    const resp = await fetch(`/api/lavoro?chiave=${encodeURIComponent("youtube:" + nomeReel)}`);
+    const dati = await resp.json();
+    if (dati.lavoro && dati.lavoro.stato === "in_corso") seguiConRiga("youtube:" + nomeReel, "YouTube", null);
+  })();
+
+  // ------------------------------------------------------------ ricerca
+  const risultatiEl = document.getElementById("risultati-ricerca");
+  const esitoRicerca = document.getElementById("esito-ricerca");
+
+  function escapeHtml(testo) {
+    const div = document.createElement("div");
+    div.textContent = testo || "";
+    return div.innerHTML;
+  }
+
+  async function cerca() {
+    const q = document.getElementById("query-ricerca").value.trim();
+    const fonte = document.getElementById("fonte-ricerca").value;
+    if (!q) return;
+    scriviMemoria({ ricerca: { q, fonte } });
+    risultatiEl.innerHTML = "";
+    esitoRicerca.textContent = "Ricerca in corso...";
+    esitoRicerca.style.color = "var(--muted)";
+    let dati;
+    try {
+      const resp = await fetch(`/api/reel/cerca-media?q=${encodeURIComponent(q)}&fonte=${fonte}`);
+      dati = await resp.json();
+    } catch (e) {
+      dati = { ok: false, messaggio: "Errore di rete." };
+    }
+    if (!dati.ok) {
+      esitoRicerca.textContent = dati.messaggio;
+      esitoRicerca.style.color = "#ff8b83";
+      return;
+    }
+    esitoRicerca.textContent = dati.risultati.length ? "" : "Nessun risultato: prova parole diverse o un'altra fonte.";
+    dati.risultati.forEach((r) => {
+      const el = document.createElement("div");
+      el.className = "card-media";
+      const dimensioni = r.larghezza ? `${r.larghezza}×${r.altezza}` : "";
+      const bassa = r.tipo === "immagine" && r.larghezza && Math.max(r.larghezza, r.altezza) < {{ lato_minimo }};
+      el.innerHTML = `
+        <div class="card-media-img">
+          <img src="${escapeHtml(r.anteprima_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+          ${r.tipo === "video" ? '<span class="badge-miniatura">VIDEO</span>' : ""}
+          ${bassa ? '<span class="badge-miniatura badge-bassa">Bassa risoluzione</span>' : ""}
+        </div>
+        <div class="card-media-testo">
+          <span class="card-media-titolo">${escapeHtml(r.titolo)}</span>
+          <span class="card-media-meta">${escapeHtml([r.autore, r.licenza, dimensioni].filter(Boolean).join(" · "))}</span>
+          <button class="btn btn-piccolo" type="button">Importa</button>
+        </div>`;
+      el.querySelector("button").addEventListener("click", async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = "Importazione...";
+        const risposta = await chiamaApi(`/api/reel/${nomeReel}/media/importa`, {
+          dati: {
+            fonte: r.fonte, tipo: r.tipo, titolo: r.titolo, anteprima_url: r.anteprima_url || "",
+            riferimento: r.riferimento, autore: r.autore || "", licenza: r.licenza || "",
+            url_origine: r.url_origine || "", assegna_a: attivo || "",
+          },
+        });
+        if (!risposta.ok) {
+          btn.disabled = false;
+          btn.textContent = "Importa";
+          return alert(risposta.messaggio);
+        }
+        btn.textContent = "In coda";
+        const assegnaA = attivo;
+        if (attivo) {
+          scriviMemoria({ attivo: prossimoSenzaVisivo(attivo) || attivo });
+          attivo = null; // gli import successivi vanno solo in libreria
+          document.getElementById("destinazione-ricerca").textContent = "Gli altri elementi importati andranno solo in libreria.";
+        }
+        seguiConRiga(risposta.chiave, r.titolo.slice(0, 60), r.tipo === "video" ? assegnaA : null);
+      });
+      risultatiEl.appendChild(el);
+    });
+    ripristinaPosizioneRimandata(); // i risultati allungano la pagina dopo il reload
+  }
+
+  document.getElementById("btn-cerca").addEventListener("click", cerca);
+  document.getElementById("query-ricerca").addEventListener("keydown", (e) => e.key === "Enter" && cerca());
+
+  {
+    const memoria = leggiMemoria();
+    if (memoria.ricerca) {
+      document.getElementById("query-ricerca").value = memoria.ricerca.q;
+      document.getElementById("fonte-ricerca").value = memoria.ricerca.fonte;
+      cerca();
+    }
+    if (memoria.scorriA) {
+      scriviMemoria({ scorriA: null });
+      const el = document.querySelector(`[data-segmento="${memoria.scorriA}"]`);
+      if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+    }
+  }
+</script>
+{% endblock %}

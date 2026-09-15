@@ -1,0 +1,510 @@
+{% extends "base.html" %}
+{% block titolo %}{{ carosello.nome_carosello }} — Carosello notizie{% endblock %}
+
+{% block contenuto %}
+<h1>{{ carosello.nome_carosello }}</h1>
+<p class="sottotitolo">Carosello notizie — {{ carosello.slides|length }} notizie</p>
+
+<div class="pannello">
+  <h2>Notizie dai feed</h2>
+  <p class="sottotitolo" style="margin-bottom:14px">
+    Le ultime notizie delle testate configurate in Impostazioni, con i titoli tradotti in italiano.
+    Seleziona quelle che ti interessano e aggiungile in blocco.
+  </p>
+  <div class="riga-bottoni">
+    <button class="btn btn-secondario" type="button" id="btn-carica-feed">Carica ultime notizie</button>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-aggiorna-feed" hidden>Rileggi i feed</button>
+    <span class="nota" id="stato-feed"></span>
+  </div>
+  <div id="blocco-feed" hidden>
+    <div class="riga-query" style="margin-top:14px">
+      <input type="text" id="filtro-feed" placeholder="Filtra per parola (es. Artemis, Marte, ESA)">
+      <label class="spunta" style="margin:0"><input type="checkbox" id="mostra-non-pertinenti"> Mostra anche le non spaziali</label>
+    </div>
+    <div class="lista-feed" id="lista-feed"></div>
+    <div class="riga-bottoni" style="margin-top:12px">
+      <button class="btn" type="button" id="btn-aggiungi-feed" disabled>Aggiungi selezionate</button>
+      <span class="nota" id="nota-feed-errori"></span>
+    </div>
+  </div>
+  <div id="avanzamento-feed" hidden style="margin-top:14px">
+    <div class="riga-progresso"><span id="fase-feed">In avvio</span><span id="percentuale-feed"></span></div>
+    <div class="barra-progresso barra-grande"><div id="barra-feed" style="width:0%"></div></div>
+  </div>
+  <p class="esito-verifica" id="esito-feed" style="white-space:pre-line"></p>
+</div>
+
+<div class="pannello">
+  <h2>Aggiungi notizia da URL</h2>
+  <div class="campo">
+    <label for="url-notizia">URL della notizia</label>
+    <input type="text" id="url-notizia" placeholder="https://...">
+  </div>
+  <button class="btn" id="btn-aggiungi-notizia">Analizza e aggiungi</button>
+</div>
+
+{% for view in slides_view %}
+  {% set slide = view.slide %}
+  <div class="pannello slide-card" data-slide-card data-numero="{{ slide.numero }}">
+    <div>
+      <div class="slide-num">NOTIZIA {{ '%02d' % slide.numero }}</div>
+      <div class="mini-slide" data-mini-slide>
+        {% if view.composta %}
+          <img src="{{ url_for('notizie.file_output', nome=carosello.nome_carosello, numero=slide.numero) }}" alt="Slide {{ slide.numero }} composta">
+        {% elif view.immagine_presente %}
+          <img src="{{ url_for('notizie.file_input', nome=carosello.nome_carosello, numero=slide.numero) }}" alt="Foto notizia {{ slide.numero }}">
+        {% else %}
+          <div class="placeholder">Nessuna foto disponibile</div>
+        {% endif %}
+      </div>
+      <label class="dropzone" data-dropzone>
+        <span data-dropzone-testo>{{ 'Sostituisci foto' if view.immagine_presente else 'Carica foto' }}</span>
+        <input type="file" accept="image/png,image/jpeg" data-input-immagine>
+      </label>
+      <button class="btn btn-secondario btn-piccolo" style="margin-top:8px;width:100%" data-btn-ricomponi {{ '' if view.immagine_presente else 'disabled' }}>
+        Componi questa slide
+      </button>
+    </div>
+
+    <div>
+      <a href="{{ slide.url }}" target="_blank" rel="noopener" class="badge badge-fase" style="text-decoration:none">{{ slide.fonte }}</a>
+      <div class="copy-preview" data-copy-preview style="margin-top:10px">
+        {% for seg in slide.segmenti %}{% if seg.evidenziato %}<span class="evid">{{ seg.testo }}</span>{% else %}{{ seg.testo }}{% endif %}{% endfor %}
+      </div>
+      <button class="btn btn-secondario btn-piccolo" data-btn-modifica-testo style="margin-bottom:12px">Modifica titolo</button>
+
+      <div data-blocco-modifica-testo hidden style="margin-bottom:12px">
+        <textarea data-input-testo rows="3" style="margin-bottom:6px">{{ view.testo_markup }}</textarea>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 8px">
+          Usa <code>**parola**</code> per evidenziarla in rosso.
+          <span data-contatore-testo></span>
+        </p>
+        <button class="btn btn-piccolo" data-btn-salva-testo>Salva titolo</button>
+        <button class="btn btn-secondario btn-piccolo" data-btn-annulla-testo>Annulla</button>
+      </div>
+
+      <button class="btn btn-secondario btn-piccolo btn-pericolo" data-btn-elimina-slide>Rimuovi questa notizia</button>
+    </div>
+  </div>
+{% endfor %}
+
+{% if not slides_view %}
+  <p class="sottotitolo">Nessuna notizia ancora aggiunta: scegline qualcuna dai feed o incolla un URL qui sopra.</p>
+{% endif %}
+
+<div class="pannello">
+  <h2>Caption per Instagram</h2>
+  <p class="sottotitolo" style="margin-bottom:12px">Una sola caption per l'intero carosello, che riassume tutte le notizie incluse.</p>
+  <div class="campo">
+    <label for="autore">Nome autore</label>
+    <input type="text" id="autore" placeholder="es. Mario Rossi">
+  </div>
+  <button class="btn" id="btn-genera-caption">
+    {{ 'Rigenera caption' if caption_esistente else 'Genera caption' }}
+  </button>
+  <div id="blocco-caption" {{ '' if caption_esistente else 'hidden' }} style="margin-top:16px">
+    <div class="caption-box" id="testo-caption">{{ caption_esistente or '' }}</div>
+    <button class="btn btn-secondario btn-piccolo" id="btn-copia-caption">Copia caption</button>
+    <p id="contatore-caption" style="font-size:0.8rem;margin:8px 0 0;color:{{ 'var(--coral)' if caption_esistente and caption_esistente|length > limite_caption else 'var(--muted)' }}">
+      {% if caption_esistente %}
+        {{ caption_esistente|length }}/{{ limite_caption }} caratteri
+        {{ '(sopra il limite)' if caption_esistente|length > limite_caption else '' }}
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="barra-azioni">
+  <button class="btn" id="btn-componi-tutte" {{ '' if slides_view else 'disabled' }}>Componi tutte le slide</button>
+  <a class="btn btn-secondario" href="{{ url_for('notizie.scarica', nome=carosello.nome_carosello) }}">Scarica ZIP output</a>
+  <a class="btn btn-secondario" href="{{ url_for('home') }}">Torna ai caroselli</a>
+  <button class="btn btn-secondario btn-pericolo" id="btn-elimina-carosello" style="margin-left:auto">Elimina carosello</button>
+</div>
+
+<div class="spinner-overlay" id="overlay-attesa">
+  <div class="spinner"></div>
+  <p id="testo-overlay">Attendere...</p>
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script src="{{ url_for('static', filename='reel.js') }}"></script>
+<script>
+  const nomeCarosello = {{ carosello.nome_carosello | tojson }};
+  const limiteTitolo = {{ limite_titolo | tojson }};
+  const overlay = document.getElementById("overlay-attesa");
+  const testoOverlay = document.getElementById("testo-overlay");
+
+  function mostraOverlay(testo) {
+    testoOverlay.innerHTML = testo;
+    overlay.classList.add("attivo");
+  }
+
+  // ---------------------------------------------------------------- notizie dai feed
+  const listaFeed = document.getElementById("lista-feed");
+  const statoFeed = document.getElementById("stato-feed");
+  const esitoFeed = document.getElementById("esito-feed");
+  const btnAggiungiFeed = document.getElementById("btn-aggiungi-feed");
+  const urlGiaPresenti = new Set({{ carosello.slides | map(attribute='url') | list | tojson }});
+  let notizieFeed = [];
+
+  function escapeHtml(testo) {
+    const div = document.createElement("div");
+    div.textContent = testo || "";
+    return div.innerHTML;
+  }
+
+  function dataRelativa(iso) {
+    if (!iso) return "data n/d";
+    const ore = (Date.now() - new Date(iso).getTime()) / 3600000;
+    if (ore < 1) return "meno di un'ora fa";
+    if (ore < 24) return `${Math.floor(ore)} ore fa`;
+    const giorni = Math.floor(ore / 24);
+    return giorni === 1 ? "ieri" : `${giorni} giorni fa`;
+  }
+
+  function aggiornaBottoneAggiungi() {
+    const n = listaFeed.querySelectorAll("input[type=checkbox]:checked").length;
+    btnAggiungiFeed.disabled = n === 0;
+    btnAggiungiFeed.textContent = n ? `Aggiungi selezionate (${n})` : "Aggiungi selezionate";
+  }
+
+  function disegnaFeed() {
+    const filtro = document.getElementById("filtro-feed").value.trim().toLowerCase();
+    const tutte = document.getElementById("mostra-non-pertinenti").checked;
+    const selezionate = new Set([...listaFeed.querySelectorAll("input:checked")].map((c) => c.value));
+    listaFeed.innerHTML = "";
+    let mostrate = 0;
+    notizieFeed.forEach((n, i) => {
+      if (!tutte && !n.pertinente) return;
+      const testo = `${n.titolo_tradotto || ""} ${n.titolo} ${n.fonte}`.toLowerCase();
+      if (filtro && !testo.includes(filtro)) return;
+      mostrate += 1;
+      const presente = urlGiaPresenti.has(n.url);
+      const riga = document.createElement("label");
+      riga.className = "voce-feed" + (presente ? " presente" : "");
+      riga.innerHTML = `
+        <input type="checkbox" value="${i}" ${presente ? "disabled" : ""} ${selezionate.has(String(i)) ? "checked" : ""}>
+        <span class="voce-feed-img">${n.url_immagine ? `<img src="${escapeHtml(n.url_immagine)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}</span>
+        <span class="voce-feed-testo">
+          <strong>${escapeHtml(n.titolo_tradotto || n.titolo)}</strong>
+          ${n.titolo_tradotto ? `<span class="nota">${escapeHtml(n.titolo)}</span>` : ""}
+          <span class="nota">${escapeHtml(n.fonte)} · ${dataRelativa(n.data)}${presente ? " · già nel carosello" : ""}${n.pertinente ? "" : " · non spaziale"}
+            · <a href="${escapeHtml(n.url)}" target="_blank" rel="noopener">apri</a></span>
+        </span>`;
+      riga.querySelector("input").addEventListener("change", aggiornaBottoneAggiungi);
+      listaFeed.appendChild(riga);
+    });
+    if (!mostrate) listaFeed.innerHTML = '<p class="nota">Nessuna notizia con questi filtri.</p>';
+    aggiornaBottoneAggiungi();
+  }
+
+  async function caricaFeed(forza) {
+    document.getElementById("btn-carica-feed").disabled = true;
+    statoFeed.textContent = "Lettura dei feed in corso (con molte testate può servire un minuto)...";
+    esitoFeed.textContent = "";
+    const risposta = await chiamaApi("/api/feed/carica", { dati: { forza: forza ? "1" : "0" } });
+    if (!risposta.ok) {
+      statoFeed.textContent = "";
+      document.getElementById("btn-carica-feed").disabled = false;
+      esitoFeed.textContent = risposta.messaggio;
+      esitoFeed.style.color = "#ff8b83";
+      return;
+    }
+    const lavoro = await seguiLavoro(risposta.chiave, () => {}, 1500);
+    document.getElementById("btn-carica-feed").disabled = false;
+    if (lavoro.stato !== "completato") {
+      statoFeed.textContent = "";
+      esitoFeed.textContent = lavoro.messaggio;
+      esitoFeed.style.color = "#ff8b83";
+      return;
+    }
+    const dati = await (await fetch("/api/feed/notizie")).json();
+    if (!dati.ok) return;
+    notizieFeed = dati.notizie;
+    const pertinenti = notizieFeed.filter((n) => n.pertinente).length;
+    statoFeed.textContent = `${pertinenti} notizie spaziali da ${dati.numero_feed} feed · lette alle ${new Date(dati.letto_il * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
+    document.getElementById("nota-feed-errori").textContent = dati.errori.length ? `${dati.errori.length} feed non hanno risposto.` : "";
+    document.getElementById("nota-feed-errori").title = dati.errori.join("\n");
+    document.getElementById("blocco-feed").hidden = false;
+    document.getElementById("btn-carica-feed").hidden = true;
+    document.getElementById("btn-aggiorna-feed").hidden = false;
+    disegnaFeed();
+  }
+
+  document.getElementById("btn-carica-feed").addEventListener("click", () => caricaFeed(false));
+  document.getElementById("btn-aggiorna-feed").addEventListener("click", () => caricaFeed(true));
+  document.getElementById("filtro-feed").addEventListener("input", disegnaFeed);
+  document.getElementById("mostra-non-pertinenti").addEventListener("change", disegnaFeed);
+
+  async function seguiAggiunta(chiave) {
+    btnAggiungiFeed.disabled = true;
+    document.getElementById("avanzamento-feed").hidden = false;
+    const lavoro = await seguiLavoro(chiave, (l) => {
+      const percentuale = Math.round(l.avanzamento * 100);
+      document.getElementById("fase-feed").textContent = l.fase;
+      document.getElementById("percentuale-feed").textContent = `${percentuale}%`;
+      document.getElementById("barra-feed").style.width = `${percentuale}%`;
+    });
+    document.getElementById("avanzamento-feed").hidden = true;
+    if (lavoro.stato === "completato") {
+      alert(lavoro.messaggio);
+      window.location.reload();
+      return;
+    }
+    esitoFeed.textContent = lavoro.messaggio;
+    esitoFeed.style.color = "#ff8b83";
+    aggiornaBottoneAggiungi();
+  }
+
+  btnAggiungiFeed.addEventListener("click", async () => {
+    const scelte = [...listaFeed.querySelectorAll("input:checked")].map((c) => notizieFeed[Number(c.value)]);
+    const resp = await fetch(`/api/notizie/${nomeCarosello}/aggiungi-da-feed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notizie: scelte }),
+    });
+    const risposta = await resp.json();
+    if (!risposta.ok) return alert(risposta.messaggio);
+    seguiAggiunta(risposta.chiave);
+  });
+
+  // Riprende un'aggiunta in corso (pagina ricaricata) e riusa l'elenco già letto.
+  (async () => {
+    const chiave = `notizie-aggiungi:${nomeCarosello}`;
+    const stato = await (await fetch(`/api/lavoro?chiave=${encodeURIComponent(chiave)}`)).json();
+    if (stato.lavoro && stato.lavoro.stato === "in_corso") seguiAggiunta(chiave);
+    const inCache = await fetch("/api/feed/notizie");
+    if (inCache.ok) caricaFeed(false);
+  })();
+
+  document.getElementById("btn-aggiungi-notizia").addEventListener("click", async () => {
+    const url = document.getElementById("url-notizia").value.trim();
+    if (!url) {
+      alert("Inserisci l'URL della notizia.");
+      return;
+    }
+    mostraOverlay("Lettura della notizia e ricerca di una foto in corso...<br>Gemini deve scaricare e leggere la pagina esterna: può richiedere fino a un minuto.");
+    try {
+      const formData = new FormData();
+      formData.append("url", url);
+      const resp = await fetch(`/api/notizie/${nomeCarosello}/aggiungi`, { method: "POST", body: formData });
+      const dati = await resp.json();
+      overlay.classList.remove("attivo");
+      if (!dati.ok) {
+        alert(dati.messaggio);
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      overlay.classList.remove("attivo");
+      alert("Errore di rete durante l'analisi della notizia.");
+    }
+  });
+
+  document.querySelectorAll("[data-input-immagine]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      if (!input.files.length) return;
+      const card = input.closest("[data-slide-card]");
+      const numero = card.dataset.numero;
+
+      const formData = new FormData();
+      formData.append("immagine", input.files[0]);
+
+      try {
+        const resp = await fetch(`/api/notizie/${nomeCarosello}/slide/${numero}/immagine`, {
+          method: "POST",
+          body: formData,
+        });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        const mini = card.querySelector("[data-mini-slide]");
+        mini.innerHTML = `<img src="/file/notizie/input/${nomeCarosello}/${numero}.png?t=${Date.now()}" alt="Foto notizia ${numero}">`;
+        card.querySelector("[data-dropzone-testo]").textContent = "Sostituisci foto";
+        card.querySelector("[data-btn-ricomponi]").disabled = false;
+      } catch (e) {
+        alert("Errore di rete durante il caricamento della foto.");
+      }
+    });
+  });
+
+  function aggiornaContatoreTesto(card) {
+    const testo = card.querySelector("[data-input-testo]").value;
+    const testoSenzaMarkup = testo.replace(/\*\*/g, "");
+    const parole = testoSenzaMarkup.trim() ? testoSenzaMarkup.trim().split(/\s+/).length : 0;
+    const caratteri = testoSenzaMarkup.length;
+    const contatore = card.querySelector("[data-contatore-testo]");
+    contatore.textContent = `${parole} parole · ${caratteri}/${limiteTitolo} caratteri`;
+    contatore.style.color = caratteri > limiteTitolo ? "var(--coral)" : "var(--muted)";
+  }
+
+  document.querySelectorAll("[data-btn-modifica-testo]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest("[data-slide-card]");
+      card.querySelector("[data-copy-preview]").hidden = true;
+      btn.hidden = true;
+      card.querySelector("[data-blocco-modifica-testo]").hidden = false;
+      aggiornaContatoreTesto(card);
+      card.querySelector("[data-input-testo]").focus();
+    });
+  });
+
+  document.querySelectorAll("[data-input-testo]").forEach((textarea) => {
+    textarea.dataset.originale = textarea.value;
+    textarea.addEventListener("input", () => aggiornaContatoreTesto(textarea.closest("[data-slide-card]")));
+  });
+
+  document.querySelectorAll("[data-btn-annulla-testo]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const card = btn.closest("[data-slide-card]");
+      const textarea = card.querySelector("[data-input-testo]");
+      textarea.value = textarea.dataset.originale;
+      card.querySelector("[data-blocco-modifica-testo]").hidden = true;
+      card.querySelector("[data-copy-preview]").hidden = false;
+      card.querySelector("[data-btn-modifica-testo]").hidden = false;
+    });
+  });
+
+  document.querySelectorAll("[data-btn-salva-testo]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest("[data-slide-card]");
+      const numero = card.dataset.numero;
+      const testo = card.querySelector("[data-input-testo]").value;
+
+      const formData = new FormData();
+      formData.append("testo", testo);
+
+      try {
+        const resp = await fetch(`/api/notizie/${nomeCarosello}/slide/${numero}/testo`, {
+          method: "POST",
+          body: formData,
+        });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        alert("Errore di rete durante il salvataggio del titolo.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-btn-elimina-slide]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest("[data-slide-card]");
+      const numero = card.dataset.numero;
+      if (!confirm("Rimuovere questa notizia dal carosello?")) return;
+      try {
+        const resp = await fetch(`/api/notizie/${nomeCarosello}/slide/${numero}/elimina`, { method: "DELETE" });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        alert("Errore di rete durante la rimozione.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-btn-ricomponi]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest("[data-slide-card]");
+      const numero = card.dataset.numero;
+      mostraOverlay(`Composizione della slide ${numero} in corso...`);
+      try {
+        const resp = await fetch(`/api/notizie/${nomeCarosello}/slide/${numero}/ricomponi`, { method: "POST" });
+        const dati = await resp.json();
+        overlay.classList.remove("attivo");
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        overlay.classList.remove("attivo");
+        alert("Errore di rete durante la composizione.");
+      }
+    });
+  });
+
+  const btnComponiTutte = document.getElementById("btn-componi-tutte");
+  if (btnComponiTutte) {
+    btnComponiTutte.addEventListener("click", async () => {
+      mostraOverlay("Composizione di tutte le slide in corso...");
+      try {
+        const resp = await fetch(`/api/notizie/${nomeCarosello}/componi`, { method: "POST" });
+        const dati = await resp.json();
+        overlay.classList.remove("attivo");
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        if (dati.saltate > 0) {
+          alert(`Composte ${dati.composte} slide. ${dati.saltate} saltate perché senza foto.`);
+        }
+        window.location.reload();
+      } catch (e) {
+        overlay.classList.remove("attivo");
+        alert("Errore di rete durante la composizione.");
+      }
+    });
+  }
+
+  document.getElementById("btn-genera-caption").addEventListener("click", async () => {
+    const autore = document.getElementById("autore").value;
+    mostraOverlay("Generazione della caption in corso...");
+    try {
+      const formData = new FormData();
+      formData.append("autore", autore);
+      const resp = await fetch(`/api/notizie/${nomeCarosello}/caption`, { method: "POST", body: formData });
+      const dati = await resp.json();
+      overlay.classList.remove("attivo");
+      if (!dati.ok) {
+        alert(dati.messaggio);
+        return;
+      }
+      document.getElementById("testo-caption").textContent = dati.caption;
+      document.getElementById("blocco-caption").hidden = false;
+      document.getElementById("btn-genera-caption").textContent = "Rigenera caption";
+
+      const contatore = document.getElementById("contatore-caption");
+      const sopraLimite = dati.lunghezza > dati.limite;
+      contatore.textContent = `${dati.lunghezza}/${dati.limite} caratteri${sopraLimite ? " (sopra il limite)" : ""}`;
+      contatore.style.color = sopraLimite ? "var(--coral)" : "var(--muted)";
+    } catch (e) {
+      overlay.classList.remove("attivo");
+      alert("Errore di rete durante la generazione della caption.");
+    }
+  });
+
+  document.getElementById("btn-copia-caption").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-copia-caption");
+    await navigator.clipboard.writeText(document.getElementById("testo-caption").textContent);
+    const originale = btn.textContent;
+    btn.textContent = "Copiato!";
+    setTimeout(() => (btn.textContent = originale), 1500);
+  });
+
+  document.getElementById("btn-elimina-carosello").addEventListener("click", async () => {
+    if (!confirm(`Eliminare definitivamente "${nomeCarosello}"? L'azione non è reversibile.`)) return;
+    try {
+      const resp = await fetch(`/api/notizie/${nomeCarosello}`, { method: "DELETE" });
+      const dati = await resp.json();
+      if (!dati.ok) {
+        alert(dati.messaggio);
+        return;
+      }
+      window.location.href = "{{ url_for('home') }}";
+    } catch (e) {
+      alert("Errore di rete durante l'eliminazione.");
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,563 @@
+{% extends "base.html" %}
+{% block titolo %}Registrazione — {{ reel.nome_reel }}{% endblock %}
+
+{% block contenuto %}
+<h1>{{ reel.nome_reel }}</h1>
+<p class="sottotitolo" style="margin-bottom:16px">Registra la voce, una parte alla volta.</p>
+{% include "_passi_reel.html" %}
+
+<div class="pannello">
+  <h2>Microfono</h2>
+  <p class="sottotitolo" style="margin-bottom:16px">
+    Stanza silenziosa, bocca a 15-20 cm dal microfono, niente fretta: le pause all'inizio e alla fine
+    vengono tagliate da sole e il rumore di fondo viene ridotto. Parla finché la barra resta nel verde,
+    senza toccare il rosso.
+  </p>
+  <div class="riga-microfono">
+    <button class="btn btn-secondario" id="btn-attiva-microfono" type="button">Attiva microfono</button>
+    <select id="scelta-microfono" hidden></select>
+    <div class="misuratore-livello" data-misuratore><div></div></div>
+  </div>
+  <p id="errore-microfono" class="esito-verifica" style="color:#ff8b83"></p>
+  <button class="btn" id="btn-registra-sequenza" type="button" style="margin-top:8px">
+    Registra in sequenza con il gobbo
+  </button>
+</div>
+
+<div class="pannello" id="pannello-voce">
+  <h2>Oppure: voce generata</h2>
+  <p class="sottotitolo" style="margin-bottom:16px">
+    Una voce sintetica legge il copione al posto tuo. Diventa una ripresa come le altre: puoi
+    alternarla alle tue registrazioni, parte per parte.
+  </p>
+  <div class="griglia-voce">
+    <div>
+      <label for="voce-motore">Motore</label>
+      <select id="voce-motore">
+        {% for chiave, descrizione in motori.items() %}
+          <option value="{{ chiave }}" {{ 'selected' if chiave == produzione.voce_motore }}>{{ descrizione }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="voce-nome">Voce</label>
+      <select id="voce-nome"></select>
+    </div>
+    <div>
+      <label for="voce-velocita">Velocità: <span id="valore-velocita"></span></label>
+      <input type="range" id="voce-velocita" min="{{ velocita_limiti[0] }}" max="{{ velocita_limiti[1] }}" step="0.05" value="{{ produzione.voce_velocita }}">
+    </div>
+  </div>
+  <div id="blocco-istruzioni" style="margin-top:12px">
+    <label for="voce-istruzioni">Come deve leggere (solo Gemini)</label>
+    <input type="text" id="voce-istruzioni" value="{{ produzione.voce_istruzioni }}" maxlength="300" style="margin-bottom:6px">
+  </div>
+  <p class="nota" id="nota-motore"></p>
+  <div class="riga-bottoni" style="margin-top:12px">
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-anteprima-voce">▶ Ascolta un esempio</button>
+    <audio id="audio-anteprima-voce" controls hidden></audio>
+  </div>
+  <div class="riga-bottoni" style="margin-top:14px">
+    <button class="btn" type="button" id="btn-genera-mancanti">Genera la voce per le parti non registrate</button>
+  </div>
+  <div id="avanzamento-voce" hidden style="margin-top:14px">
+    <div class="riga-progresso"><span id="fase-voce">In avvio</span><span id="percentuale-voce"></span></div>
+    <div class="barra-progresso barra-grande"><div id="barra-voce" style="width:0%"></div></div>
+  </div>
+  <p class="esito-verifica" id="esito-voce"></p>
+</div>
+
+{% for view in segmenti_view %}
+  {% set s = view.segmento %}
+  <div class="pannello segmento-registrazione" data-segmento="{{ s.chiave }}">
+    <div class="segmento-intestazione">
+      <div class="slide-num">{{ s.etichetta | upper }} — ~{{ view.durata_stimata }} stimati</div>
+      <span class="badge" data-badge-stato></span>
+    </div>
+    <p class="testo-da-leggere">{{ s.testo }}</p>
+    <div data-lista-takes></div>
+    <div class="riga-bottoni">
+      <button class="btn btn-piccolo" type="button" data-btn-registra>● Registra</button>
+      <button class="btn btn-secondario btn-piccolo" type="button" data-btn-apri-genera>Genera voce</button>
+      <label class="btn btn-secondario btn-piccolo etichetta-file">
+        Carica audio
+        <input type="file" accept="audio/*,.m4a,.opus" data-input-audio>
+      </label>
+      <span class="esito-verifica" data-esito style="margin:0"></span>
+    </div>
+    <div class="editor-voce" data-editor-voce hidden>
+      <label>Testo da leggere. Puoi scrivere le parole come vanno pronunciate (es. "Seds Upò"): i sottotitoli seguono comunque l'audio.</label>
+      <textarea rows="3" data-testo-voce>{{ s.testo }}</textarea>
+      <button class="btn btn-piccolo" type="button" data-btn-genera-parte>Genera con la voce scelta</button>
+    </div>
+  </div>
+{% endfor %}
+
+<div class="barra-azioni">
+  <a class="btn" href="{{ url_for('reel_prod.visivi', nome=reel.nome_reel) }}">Avanti: scegli i visivi →</a>
+</div>
+
+{# Gobbo a tutto schermo #}
+<div class="teleprompter" id="teleprompter" hidden>
+  <div class="teleprompter-barra">
+    <span id="tp-etichetta"></span>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="tp-chiudi">Chiudi (Esc)</button>
+  </div>
+  <div class="teleprompter-testo" id="tp-testo"></div>
+  <div class="teleprompter-stato">
+    <div id="tp-conto" class="tp-conto" hidden></div>
+    <div id="tp-registrando" hidden>
+      <span class="punto-rec"></span> <span id="tp-timer">0.0 s</span>
+    </div>
+    <div class="misuratore-livello misuratore-grande" data-misuratore><div></div></div>
+    <div id="tp-messaggio" class="tp-messaggio"></div>
+    <audio id="tp-audio" controls hidden></audio>
+    <div class="riga-bottoni" style="justify-content:center">
+      <button class="btn btn-secondario" type="button" id="tp-precedente">← Precedente</button>
+      <button class="btn" type="button" id="tp-azione">Inizia (Spazio)</button>
+      <button class="btn btn-secondario" type="button" id="tp-successivo">Successivo →</button>
+    </div>
+  </div>
+  <div class="teleprompter-aiuto">Spazio: avvia / ferma · ← →: cambia parte · Esc: chiudi</div>
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script src="{{ url_for('static', filename='reel.js') }}"></script>
+<script>
+  const nomeReel = {{ reel.nome_reel | tojson }};
+  const segmenti = {{ segmenti_js | tojson }};
+  const statoTakes = {
+    {% for view in segmenti_view %}{{ view.segmento.chiave | tojson }}: {{ view.dati | tojson }},{% endfor %}
+  };
+  let modificato = false;
+
+  // ---------------------------------------------------------------- takes
+  function disegnaTakes(chiave) {
+    const card = document.querySelector(`[data-segmento="${chiave}"]`);
+    const dati = statoTakes[chiave];
+    const lista = card.querySelector("[data-lista-takes]");
+    lista.innerHTML = "";
+    dati.takes.forEach((t, i) => {
+      const riga = document.createElement("div");
+      riga.className = "riga-take" + (t.id === dati.take_scelto ? " scelta" : "");
+      riga.innerHTML = `
+        <label class="take-scelta"><input type="radio" name="take-${chiave}" ${t.id === dati.take_scelto ? "checked" : ""}> Ripresa ${i + 1}</label>
+        <span class="take-durata">${t.durata.toFixed(1)} s</span>
+        ${t.voce_ai ? `<span class="badge badge-fase" title="Voce generata">Voce AI · ${t.voce_ai.split(" · ").pop()}</span>` : ""}
+        <audio controls preload="none" src="${t.url}"></audio>
+        <button type="button" class="btn btn-secondario btn-piccolo btn-pericolo" title="Elimina ripresa">✕</button>`;
+      riga.querySelector("input").addEventListener("change", async () => {
+        const risposta = await chiamaApi(`/api/reel/${nomeReel}/take/${chiave}/${t.id}/scegli`);
+        if (!risposta.ok) return alert(risposta.messaggio);
+        aggiornaTakes(chiave, risposta);
+      });
+      riga.querySelector("button").addEventListener("click", async () => {
+        if (!confirm("Eliminare questa ripresa?")) return;
+        const risposta = await chiamaApi(`/api/reel/${nomeReel}/take/${chiave}/${t.id}`, { metodo: "DELETE" });
+        if (!risposta.ok) return alert(risposta.messaggio);
+        aggiornaTakes(chiave, risposta);
+      });
+      lista.appendChild(riga);
+    });
+    const badge = card.querySelector("[data-badge-stato]");
+    const fatto = Boolean(dati.take_scelto);
+    badge.className = "badge " + (fatto ? "badge-ok" : "badge-fase");
+    badge.textContent = fatto ? "Registrato" : "Da registrare";
+  }
+
+  function aggiornaTakes(chiave, risposta) {
+    statoTakes[chiave] = { take_scelto: risposta.take_scelto, takes: risposta.takes };
+    modificato = true;
+    disegnaTakes(chiave);
+  }
+
+  segmenti.forEach((s) => disegnaTakes(s.chiave));
+
+  async function inviaAudio(chiave, blob, nomeFile) {
+    const dati = new FormData();
+    dati.append("audio", blob, nomeFile);
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/take/${chiave}`, { dati });
+    if (risposta.ok) aggiornaTakes(chiave, risposta);
+    return risposta;
+  }
+
+  document.querySelectorAll("[data-input-audio]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const card = input.closest("[data-segmento]");
+      const esito = card.querySelector("[data-esito]");
+      const file = input.files[0];
+      if (!file) return;
+      esito.textContent = "Pulizia dell'audio in corso...";
+      esito.style.color = "var(--muted)";
+      const risposta = await inviaAudio(card.dataset.segmento, file, file.name);
+      esito.textContent = risposta.ok ? "Caricato." : risposta.messaggio;
+      esito.style.color = risposta.ok ? "var(--verde)" : "#ff8b83";
+      input.value = "";
+    });
+  });
+
+  // ---------------------------------------------------------------- voce generata
+  const voci = {{ voci | tojson }};
+  const chiaveLavoroVoce = {{ chiave_lavoro_voce | tojson }};
+  const selMotore = document.getElementById("voce-motore");
+  const selVoce = document.getElementById("voce-nome");
+  const cursoreVelocita = document.getElementById("voce-velocita");
+  const inputIstruzioni = document.getElementById("voce-istruzioni");
+  const esitoVoce = document.getElementById("esito-voce");
+  let voceSalvata = {{ produzione.voce_nome | tojson }};
+
+  function mostraEsitoVoce(testo, ok) {
+    esitoVoce.textContent = testo;
+    esitoVoce.style.color = ok === null ? "var(--muted)" : ok ? "var(--verde)" : "#ff8b83";
+  }
+
+  function aggiornaSceltaVoce() {
+    const motore = selMotore.value;
+    const scelta = selVoce.value || voceSalvata;
+    selVoce.innerHTML = Object.entries(voci[motore])
+      .map(([chiave, nome]) => `<option value="${chiave}">${nome}</option>`)
+      .join("");
+    if (voci[motore][scelta]) selVoce.value = scelta;
+    document.getElementById("blocco-istruzioni").hidden = motore !== "gemini";
+    document.getElementById("nota-motore").textContent = motore === "kokoro"
+      ? "Gratuita e senza limiti. La prima volta scarica il modello (~120 MB), poi circa 10-20 secondi per parte."
+      : "Intonazione più naturale, segue le istruzioni sul tono. Ogni parte (e ogni esempio) usa una richiesta della quota gratuita, che per le voci è limitata.";
+    document.getElementById("valore-velocita").textContent = `${Number(cursoreVelocita.value).toFixed(2)}×`;
+  }
+  aggiornaSceltaVoce();
+
+  function datiVoce() {
+    return {
+      motore: selMotore.value,
+      voce: selVoce.value,
+      velocita: cursoreVelocita.value,
+      istruzioni: inputIstruzioni.value,
+    };
+  }
+
+  async function salvaVoce() {
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/voce/impostazioni`, { dati: datiVoce() });
+    if (!risposta.ok) mostraEsitoVoce(risposta.messaggio, false);
+    else voceSalvata = selVoce.value;
+    return risposta.ok;
+  }
+
+  selMotore.addEventListener("change", () => {
+    aggiornaSceltaVoce();
+    salvaVoce();
+  });
+  selVoce.addEventListener("change", salvaVoce);
+  cursoreVelocita.addEventListener("input", aggiornaSceltaVoce);
+  cursoreVelocita.addEventListener("change", salvaVoce);
+  inputIstruzioni.addEventListener("change", salvaVoce);
+
+  document.getElementById("btn-anteprima-voce").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    mostraEsitoVoce("Preparazione dell'esempio...", null);
+    const risposta = await chiamaApi("/api/voce/anteprima", { dati: datiVoce() });
+    if (!risposta.ok) {
+      btn.disabled = false;
+      return mostraEsitoVoce(risposta.messaggio, false);
+    }
+    const lavoro = await seguiLavoro(risposta.chiave, (l) => mostraEsitoVoce(l.fase + "...", null));
+    btn.disabled = false;
+    if (lavoro.stato !== "completato") return mostraEsitoVoce(lavoro.messaggio, false);
+    mostraEsitoVoce("", null);
+    const audio = document.getElementById("audio-anteprima-voce");
+    audio.src = `/file/anteprima-voce/${lavoro.messaggio}`;
+    audio.hidden = false;
+    audio.play();
+  });
+
+  const bottoniGenera = () => document.querySelectorAll("#btn-genera-mancanti, [data-btn-genera-parte]");
+
+  async function seguiGenerazione() {
+    bottoniGenera().forEach((b) => (b.disabled = true));
+    document.getElementById("avanzamento-voce").hidden = false;
+    mostraEsitoVoce("", null);
+    const lavoro = await seguiLavoro(chiaveLavoroVoce, (l) => {
+      const percentuale = Math.round(l.avanzamento * 100);
+      document.getElementById("fase-voce").textContent = l.fase;
+      document.getElementById("percentuale-voce").textContent = `${percentuale}%`;
+      document.getElementById("barra-voce").style.width = `${percentuale}%`;
+    });
+    if (lavoro.stato === "completato") {
+      ricaricaMantenendoPosizione();
+      return;
+    }
+    document.getElementById("avanzamento-voce").hidden = true;
+    bottoniGenera().forEach((b) => (b.disabled = false));
+    mostraEsitoVoce(lavoro.messaggio, false);
+  }
+
+  async function avviaGenerazione(dati) {
+    if (!(await salvaVoce())) return;
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/voce/genera`, { dati });
+    if (!risposta.ok) return mostraEsitoVoce(risposta.messaggio, false);
+    document.getElementById("pannello-voce").scrollIntoView({ behavior: "smooth", block: "center" });
+    seguiGenerazione();
+  }
+
+  document.getElementById("btn-genera-mancanti").addEventListener("click", () => avviaGenerazione({ chiave: "mancanti" }));
+
+  document.querySelectorAll("[data-segmento]").forEach((card) => {
+    const editor = card.querySelector("[data-editor-voce]");
+    card.querySelector("[data-btn-apri-genera]").addEventListener("click", () => {
+      editor.hidden = !editor.hidden;
+    });
+    card.querySelector("[data-btn-genera-parte]").addEventListener("click", () =>
+      avviaGenerazione({ chiave: card.dataset.segmento, testo: card.querySelector("[data-testo-voce]").value })
+    );
+  });
+
+  // Se una generazione è già in corso (pagina ricaricata), riprende a seguirla.
+  (async () => {
+    const resp = await fetch(`/api/lavoro?chiave=${encodeURIComponent(chiaveLavoroVoce)}`);
+    const dati = await resp.json();
+    if (dati.lavoro && dati.lavoro.stato === "in_corso") seguiGenerazione();
+  })();
+
+  // ---------------------------------------------------------------- microfono
+  let flusso = null;
+  let contestoAudio = null;
+  let analizzatore = null;
+  const sceltaMicrofono = document.getElementById("scelta-microfono");
+  const erroreMicrofono = document.getElementById("errore-microfono");
+
+  async function attivaMicrofono(idDispositivo) {
+    erroreMicrofono.textContent = "";
+    if (flusso) flusso.getTracks().forEach((t) => t.stop());
+    try {
+      flusso = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: idDispositivo ? { exact: idDispositivo } : undefined,
+          channelCount: 1,
+          // La pulizia la fa il server con filtri migliori: quelli del browser
+          // (pensati per le videochiamate) tendono a "mangiare" la voce.
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      });
+    } catch (e) {
+      erroreMicrofono.textContent = "Microfono non disponibile: consenti l'accesso dal browser e riprova. " + e.message;
+      return false;
+    }
+    contestoAudio = contestoAudio || new AudioContext();
+    analizzatore = contestoAudio.createAnalyser();
+    analizzatore.fftSize = 1024;
+    contestoAudio.createMediaStreamSource(flusso).connect(analizzatore);
+
+    const dispositivi = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+    const attivo = flusso.getAudioTracks()[0].getSettings().deviceId;
+    sceltaMicrofono.innerHTML = dispositivi
+      .map((d, i) => `<option value="${d.deviceId}" ${d.deviceId === attivo ? "selected" : ""}>${d.label || "Microfono " + (i + 1)}</option>`)
+      .join("");
+    sceltaMicrofono.hidden = dispositivi.length < 2;
+    document.getElementById("btn-attiva-microfono").textContent = "Microfono attivo";
+    return true;
+  }
+
+  sceltaMicrofono.addEventListener("change", () => attivaMicrofono(sceltaMicrofono.value));
+  document.getElementById("btn-attiva-microfono").addEventListener("click", () => attivaMicrofono(sceltaMicrofono.value));
+
+  const campioni = new Float32Array(1024);
+  function aggiornaMisuratori() {
+    if (analizzatore) {
+      analizzatore.getFloatTimeDomainData(campioni);
+      let somma = 0;
+      let picco = 0;
+      for (const v of campioni) {
+        somma += v * v;
+        picco = Math.max(picco, Math.abs(v));
+      }
+      const db = 20 * Math.log10(Math.sqrt(somma / campioni.length) || 1e-6);
+      const percentuale = Math.min(Math.max((db + 60) / 60, 0), 1) * 100;
+      document.querySelectorAll("[data-misuratore] > div").forEach((barra) => {
+        barra.style.width = `${percentuale}%`;
+        barra.classList.toggle("saturato", picco > 0.98);
+      });
+    }
+    requestAnimationFrame(aggiornaMisuratori);
+  }
+  aggiornaMisuratori();
+
+  // ---------------------------------------------------------------- gobbo
+  const tp = {
+    radice: document.getElementById("teleprompter"),
+    etichetta: document.getElementById("tp-etichetta"),
+    testo: document.getElementById("tp-testo"),
+    conto: document.getElementById("tp-conto"),
+    registrando: document.getElementById("tp-registrando"),
+    timer: document.getElementById("tp-timer"),
+    messaggio: document.getElementById("tp-messaggio"),
+    audio: document.getElementById("tp-audio"),
+    azione: document.getElementById("tp-azione"),
+  };
+  let indice = 0;
+  let fase = "pronto"; // pronto | conto | registra | invio | fatto
+  let registratore = null;
+  let annullata = false;
+  let timerConto = null;
+  let inizioRegistrazione = 0;
+
+  function formatoRegistrazione() {
+    const candidati = [
+      ["audio/webm;codecs=opus", "webm"],
+      ["audio/ogg;codecs=opus", "ogg"],
+      ["audio/mp4", "m4a"],
+    ];
+    return candidati.find(([tipo]) => MediaRecorder.isTypeSupported(tipo)) || ["", "webm"];
+  }
+
+  function impostaFase(nuova, messaggio = "") {
+    fase = nuova;
+    tp.conto.hidden = nuova !== "conto";
+    tp.registrando.hidden = nuova !== "registra";
+    tp.audio.hidden = nuova !== "fatto";
+    tp.messaggio.textContent = messaggio;
+    tp.radice.classList.toggle("in-registrazione", nuova === "registra");
+    const testiAzione = { pronto: "Inizia (Spazio)", conto: "Annulla (Spazio)", registra: "■ Ferma (Spazio)", invio: "Attendi...", fatto: "Rifai (Spazio)" };
+    tp.azione.textContent = testiAzione[nuova];
+    tp.azione.disabled = nuova === "invio";
+    document.getElementById("tp-precedente").disabled = ["conto", "registra", "invio"].includes(nuova) || indice === 0;
+    document.getElementById("tp-successivo").disabled = ["conto", "registra", "invio"].includes(nuova) || indice === segmenti.length - 1;
+  }
+
+  function mostraSegmento(nuovoIndice) {
+    indice = nuovoIndice;
+    const s = segmenti[indice];
+    tp.etichetta.textContent = `${s.etichetta} · ${indice + 1} di ${segmenti.length}`;
+    tp.testo.textContent = s.testo;
+    const dati = statoTakes[s.chiave];
+    const scelta = dati.takes.find((t) => t.id === dati.take_scelto);
+    if (scelta) {
+      tp.audio.src = scelta.url;
+      impostaFase("fatto", `Già registrato (${scelta.durata.toFixed(1)} s). Spazio per rifare, → per andare avanti.`);
+    } else {
+      impostaFase("pronto");
+    }
+  }
+
+  async function apriGobbo(daIndice) {
+    if (!flusso && !(await attivaMicrofono(sceltaMicrofono.value))) return;
+    if (contestoAudio.state === "suspended") await contestoAudio.resume();
+    tp.radice.hidden = false;
+    document.body.style.overflow = "hidden";
+    mostraSegmento(daIndice);
+  }
+
+  function chiudiGobbo() {
+    if (fase === "registra") {
+      annullata = true;
+      registratore.stop();
+    }
+    clearInterval(timerConto);
+    tp.radice.hidden = true;
+    document.body.style.overflow = "";
+    tp.audio.pause();
+    if (modificato) ricaricaMantenendoPosizione();
+  }
+
+  function avviaConto() {
+    tp.audio.pause();
+    let restanti = 3;
+    tp.conto.textContent = restanti;
+    impostaFase("conto");
+    timerConto = setInterval(() => {
+      restanti -= 1;
+      if (restanti === 0) {
+        clearInterval(timerConto);
+        avviaRegistrazione();
+      } else {
+        tp.conto.textContent = restanti;
+      }
+    }, 800);
+  }
+
+  function avviaRegistrazione() {
+    const [tipo, estensione] = formatoRegistrazione();
+    const pezzi = [];
+    annullata = false;
+    registratore = new MediaRecorder(flusso, tipo ? { mimeType: tipo } : undefined);
+    registratore.ondataavailable = (e) => e.data.size && pezzi.push(e.data);
+    registratore.onstop = async () => {
+      if (annullata) return;
+      const chiave = segmenti[indice].chiave;
+      impostaFase("invio", "Pulizia dell'audio in corso...");
+      const risposta = await inviaAudio(chiave, new Blob(pezzi, { type: registratore.mimeType }), `registrazione.${estensione}`);
+      if (!risposta.ok) {
+        impostaFase("pronto", risposta.messaggio);
+        return;
+      }
+      const nuova = risposta.takes.find((t) => t.id === risposta.take_scelto);
+      tp.audio.src = nuova.url;
+      impostaFase("fatto", `Ripresa salvata: ${nuova.durata.toFixed(1)} s. Riascoltala, Spazio per rifare, → per andare avanti.`);
+    };
+    registratore.start();
+    inizioRegistrazione = performance.now();
+    impostaFase("registra");
+    const aggiornaTimer = () => {
+      if (fase !== "registra") return;
+      tp.timer.textContent = formattaSecondi((performance.now() - inizioRegistrazione) / 1000);
+      requestAnimationFrame(aggiornaTimer);
+    };
+    aggiornaTimer();
+  }
+
+  function azionePrincipale() {
+    if (fase === "pronto" || fase === "fatto") avviaConto();
+    else if (fase === "conto") {
+      clearInterval(timerConto);
+      mostraSegmento(indice);
+    } else if (fase === "registra") registratore.stop();
+  }
+
+  function spostati(delta) {
+    if (["conto", "registra", "invio"].includes(fase)) return;
+    const nuovo = indice + delta;
+    if (nuovo >= 0 && nuovo < segmenti.length) mostraSegmento(nuovo);
+  }
+
+  // blur(): altrimenti il bottone resta a fuoco e il successivo Spazio/Invio
+  // lo "clicca" di nuovo oltre a eseguire la scorciatoia da tastiera.
+  const alClic = (id, azione) =>
+    document.getElementById(id).addEventListener("click", (e) => {
+      e.currentTarget.blur();
+      azione();
+    });
+  alClic("tp-azione", azionePrincipale);
+  alClic("tp-precedente", () => spostati(-1));
+  alClic("tp-successivo", () => spostati(1));
+  alClic("tp-chiudi", chiudiGobbo);
+
+  document.addEventListener("keydown", (e) => {
+    if (tp.radice.hidden) return;
+    if (e.code === "Space") {
+      e.preventDefault();
+      azionePrincipale();
+    } else if (e.key === "ArrowRight" || e.key === "Enter") {
+      e.preventDefault();
+      spostati(1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      spostati(-1);
+    } else if (e.key === "Escape") {
+      chiudiGobbo();
+    }
+  });
+
+  document.getElementById("btn-registra-sequenza").addEventListener("click", () => {
+    const daFare = segmenti.findIndex((s) => !statoTakes[s.chiave].take_scelto);
+    apriGobbo(daFare === -1 ? 0 : daFare);
+  });
+  document.querySelectorAll("[data-btn-registra]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const chiave = btn.closest("[data-segmento]").dataset.segmento;
+      apriGobbo(segmenti.findIndex((s) => s.chiave === chiave));
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+google-genai>=2.0.0
+Pillow>=10.0.0
+PyYAML>=6.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+Flask>=3.0.0
+httpx>=0.27.0
+# Reel: ffmpeg incluso nel pacchetto, download YouTube, trascrizione locale
+imageio-ffmpeg>=0.5.0
+# metriche del font per allineare il rettangolo dei sottotitoli
+fonttools>=4.40
+yt-dlp>=2025.1.1
+faster-whisper>=1.1.0
+# Reel: voce generata gratuita in locale (Kokoro)
+kokoro-onnx>=0.4.7
+# huggingface-hub 1.x richiede click>=8.4, incompatibile con altri tool comuni (es. platformio)
+huggingface-hub<1.0

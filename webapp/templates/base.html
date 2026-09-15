@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titolo %}Generatore Caroselli — SEDS UPO{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="{{ url_for('home') }}">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="SEDS UPO">
+      Generatore Caroselli
+    </a>
+    <div class="navbar-links">
+      <a href="{{ url_for('home') }}">Caroselli</a>
+      <a href="{{ url_for('impostazioni') }}">Impostazioni</a>
+    </div>
+  </nav>
+
+  <div class="contenitore">
+    {% with messaggi = get_flashed_messages(with_categories=true) %}
+      {% if messaggi %}
+        {% for categoria, testo in messaggi %}
+          <div class="flash flash-{{ categoria }}">{{ testo }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block contenuto %}{% endblock %}
+  </div>
+
+  {% block script_coda %}{% endblock %}
+</body>
+</html>

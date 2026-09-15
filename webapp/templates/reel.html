@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block titolo %}{{ reel.nome_reel }} — Creatore Reel{% endblock %}
+
+{% block contenuto %}
+<h1>{{ reel.nome_reel }}</h1>
+<p class="sottotitolo" style="margin-bottom:16px">
+  {{ reel.argomento }} —
+  <span style="color: {{ 'var(--verde)' if durata_ok else 'var(--coral)' }}">durata stimata ~{{ durata_totale }}</span>
+  {{ '' if durata_ok else ' (sotto il minuto: valuta di allungare qualche scena)' }}
+</p>
+{% include "_passi_reel.html" %}
+
+<div class="pannello">
+  <h2>Hook — scegli la variante</h2>
+  <p class="sottotitolo" style="margin-bottom:12px">I primi 2-3 secondi: quella che ferma lo scroll.</p>
+  {% for h in reel.hook_varianti %}
+    <div class="pannello" data-hook-opzione data-hook="{{ h }}" style="padding:14px;margin-bottom:8px;cursor:pointer;{{ 'border-color: var(--coral)' if h == reel.hook_scelto else '' }}">
+      {% if h == reel.hook_scelto %}<span class="badge badge-ok" style="margin-bottom:6px">Scelto</span><br>{% endif %}
+      {{ h }}
+    </div>
+  {% endfor %}
+</div>
+
+<div class="riga-aggiungi-scena">
+  <button class="btn btn-secondario btn-piccolo" type="button" data-btn-aggiungi-scena data-dopo="0">+ Aggiungi una scena qui</button>
+</div>
+
+{% for view in scene_view %}
+  {% set scena = view.scena %}
+  <div class="pannello {{ 'scena-nuova' if view.nuova }}" data-scena-card data-numero="{{ scena.numero }}" data-registrata="{{ '1' if view.registrata else '0' }}" id="scena-{{ scena.numero }}">
+    <div class="segmento-intestazione">
+      <div class="slide-num">SCENA {{ '%02d' % scena.numero }} — ~{{ view.durata }}</div>
+      <button class="btn btn-secondario btn-piccolo btn-pericolo" type="button" data-btn-elimina-scena {{ 'disabled' if scene_view | length == 1 }}>Elimina scena</button>
+    </div>
+    <div class="campo" style="margin-top:10px">
+      <label>Cosa dire</label>
+      <textarea data-input-testo-parlato rows="2" {{ 'data-seleziona' if view.nuova }}>{{ scena.testo_parlato }}</textarea>
+    </div>
+    <div class="campo">
+      <label>Cosa mostrare</label>
+      <textarea data-input-visivo rows="2">{{ scena.visivo_suggerito }}</textarea>
+    </div>
+    <button class="btn btn-piccolo" data-btn-salva-scena>Salva scena</button>
+  </div>
+  <div class="riga-aggiungi-scena">
+    <button class="btn btn-secondario btn-piccolo" type="button" data-btn-aggiungi-scena data-dopo="{{ scena.numero }}">+ Aggiungi una scena qui</button>
+  </div>
+{% endfor %}
+
+<div class="pannello">
+  <h2>Chiusura</h2>
+  <p style="margin:0">{{ reel.chiusura_cta }}</p>
+</div>
+
+<div class="barra-azioni">
+  <a class="btn" href="{{ url_for('reel_prod.passo_successivo', nome=reel.nome_reel) }}">Continua con la produzione →</a>
+  <button class="btn btn-secondario" id="btn-rigenera">Rigenera copione</button>
+  <a class="btn btn-secondario" href="{{ url_for('home') }}">Torna ai creatori</a>
+  <button class="btn btn-secondario btn-pericolo" id="btn-elimina-reel" style="margin-left:auto">Elimina reel</button>
+</div>
+
+<div class="spinner-overlay" id="overlay-attesa">
+  <div class="spinner"></div>
+  <p id="testo-overlay">Attendere...</p>
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script>
+  const nomeReel = {{ reel.nome_reel | tojson }};
+  const overlay = document.getElementById("overlay-attesa");
+  const testoOverlay = document.getElementById("testo-overlay");
+
+  function mostraOverlay(testo) {
+    testoOverlay.innerHTML = testo;
+    overlay.classList.add("attivo");
+  }
+
+  document.querySelectorAll("[data-hook-opzione]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const hook = el.dataset.hook;
+      try {
+        const formData = new FormData();
+        formData.append("hook", hook);
+        const resp = await fetch(`/api/reel/${nomeReel}/hook`, { method: "POST", body: formData });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        if (dati.avviso) alert(dati.avviso);
+        window.location.reload();
+      } catch (e) {
+        alert("Errore di rete.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-btn-salva-scena]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest("[data-scena-card]");
+      const numero = card.dataset.numero;
+      const testoParlato = card.querySelector("[data-input-testo-parlato]").value;
+      const visivo = card.querySelector("[data-input-visivo]").value;
+
+      const formData = new FormData();
+      formData.append("testo_parlato", testoParlato);
+      formData.append("visivo_suggerito", visivo);
+
+      try {
+        const resp = await fetch(`/api/reel/${nomeReel}/scena/${numero}`, { method: "POST", body: formData });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          alert(dati.messaggio);
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        alert("Errore di rete durante il salvataggio della scena.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-btn-aggiungi-scena]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const formData = new FormData();
+      formData.append("dopo", btn.dataset.dopo);
+      try {
+        const resp = await fetch(`/api/reel/${nomeReel}/scena/aggiungi`, { method: "POST", body: formData });
+        const dati = await resp.json();
+        if (!dati.ok) return alert(dati.messaggio);
+        window.location.hash = `scena-${dati.numero}`;
+        window.location.reload();
+      } catch (e) {
+        alert("Errore di rete.");
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-btn-elimina-scena]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const card = btn.closest("[data-scena-card]");
+      const avviso = card.dataset.registrata === "1" ? "\nLe registrazioni di questa scena verranno cancellate." : "";
+      if (!confirm(`Eliminare la scena ${card.dataset.numero}?${avviso}`)) return;
+      try {
+        const resp = await fetch(`/api/reel/${nomeReel}/scena/${card.dataset.numero}`, { method: "DELETE" });
+        const dati = await resp.json();
+        if (!dati.ok) return alert(dati.messaggio);
+        window.location.reload();
+      } catch (e) {
+        alert("Errore di rete.");
+      }
+    });
+  });
+
+  // Scena appena aggiunta: testo segnaposto già selezionato, basta scrivere.
+  const nuova = document.querySelector("[data-seleziona]");
+  if (nuova) {
+    nuova.closest("[data-scena-card]").scrollIntoView({ block: "center" });
+    nuova.focus();
+    nuova.select();
+  }
+
+  document.getElementById("btn-rigenera").addEventListener("click", async () => {
+    const avviso = {{ 'true' if ha_registrazioni else 'false' }}
+      ? "\n\nAnche le registrazioni già fatte verranno scartate (la libreria di immagini e video resta)."
+      : "";
+    if (!confirm("Rigenerare il copione? Le modifiche fatte a mano a scene e hook andranno perse." + avviso)) return;
+    mostraOverlay("Generazione di un nuovo copione in corso...<br>Può richiedere fino a un minuto.");
+    try {
+      const resp = await fetch(`/api/reel/${nomeReel}/rigenera`, { method: "POST" });
+      const dati = await resp.json();
+      overlay.classList.remove("attivo");
+      if (!dati.ok) {
+        alert(dati.messaggio);
+        return;
+      }
+      window.location.reload();
+    } catch (e) {
+      overlay.classList.remove("attivo");
+      alert("Errore di rete durante la rigenerazione.");
+    }
+  });
+
+  document.getElementById("btn-elimina-reel").addEventListener("click", async () => {
+    if (!confirm(`Eliminare definitivamente "${nomeReel}"? Registrazioni, media e video verranno cancellati. L'azione non è reversibile.`)) return;
+    try {
+      const resp = await fetch(`/api/reel/${nomeReel}`, { method: "DELETE" });
+      const dati = await resp.json();
+      if (!dati.ok) {
+        alert(dati.messaggio);
+        return;
+      }
+      window.location.href = "{{ url_for('home') }}";
+    } catch (e) {
+      alert("Errore di rete durante l'eliminazione.");
+    }
+  });
+</script>
+{% endblock %}

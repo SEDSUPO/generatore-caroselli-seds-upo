@@ -1,0 +1,176 @@
+# Feed RSS da cui l'app pesca le notizie spaziali.
+# Gestito dall'interfaccia (Impostazioni) o con importa_feed.py; modificabile anche a mano.
+feeds:
+- nome: NASA Science
+  url: https://science.nasa.gov/feed/
+- nome: NASA
+  url: https://www.nasa.gov/feed/
+- nome: Latest from Space.com
+  url: https://www.space.com/feeds.xml
+- nome: SpaceNews
+  url: https://spacenews.com/feed/
+- nome: Universe Today
+  url: https://www.universetoday.com/rss.xml
+- nome: Space - Ars Technica
+  url: https://arstechnica.com/space/feed/
+- nome: Spaceflight Now
+  url: https://spaceflightnow.com/feed/
+- nome: NASASpaceFlight.com
+  url: https://www.nasaspaceflight.com/feed/
+- nome: SpacePolicyOnline.com
+  url: https://spacepolicyonline.com/feed/
+- nome: The Planetary Society Articles
+  url: https://planetary.org/rss/news.xml
+- nome: Astronomy Magazine
+  url: https://www.astronomy.com/feed/
+- nome: Astronomy Now
+  url: https://astronomynow.com/feed/
+- nome: Space | EarthSky
+  url: https://earthsky.org/space/feed/
+- nome: Space News - Space, Astronomy, Space Exploration
+  url: https://phys.org/rss-feed/space-news/
+- nome: Space & Time News -- ScienceDaily
+  url: https://www.sciencedaily.com/rss/space_time.xml
+- nome: astrophysics – Quanta Magazine
+  url: https://www.quantamagazine.org/tag/astrophysics/feed/
+- nome: astronomytrek.com
+  url: https://www.astronomytrek.com/feed/
+- nome: Space Explored
+  url: https://spaceexplored.com/feed/
+- nome: Payload
+  url: https://payloadspace.com/feed/
+- nome: ESO Top News
+  url: https://feeds.feedburner.com/EsoTopNews
+- nome: Europlanet
+  url: https://www.europlanet.org/feed/
+- nome: Latest News From Euronews | Euronews RSS
+  url: https://www.euronews.com/rss
+- nome: 'Space: news, videos, reports and analysis - France 24'
+  url: https://www.france24.com/en/tag/space/rss
+- nome: Ciel et Espace
+  url: https://www.cieletespace.fr/rss.xml
+- nome: AVION DE CHASSE
+  url: https://www.avion-chasse.fr/feed/
+- nome: Le notizie ASI della settimana
+  url: https://www.asi.it/feed/
+- nome: MEDIA INAF
+  url: https://www.media.inaf.it/feed/
+- nome: Global Science
+  url: https://www.globalscience.it/feed/
+- nome: Primo piano ANSA - ANSA.it
+  url: https://www.ansa.it/rss.xml
+- nome: Repubblica.it > Scienze
+  url: http://www.repubblica.it/rss/scienze/rss2.0.xml
+- nome: Corriere.it
+  url: https://www.corriere.it/rss/news.xml
+- nome: Galileo
+  url: https://www.galileonet.it/feed/
+- nome: AstronautiNEWS
+  url: https://www.astronautinews.it/feed/
+- nome: Coelum Astronomia
+  url: https://www.coelum.com/feed
+- nome: Astronomia.com
+  url: https://www.astronomia.com/feed/
+- nome: AstroSpace
+  url: https://www.astrospace.it/feed/
+- nome: AstronautiCAST
+  url: https://www.astronauticast.it/feed/
+- nome: 新闻要闻-新浪新闻
+  url: https://rss.sina.com.cn/news/marquee/ddt.xml
+- nome: jiji.comアクセスランキング
+  url: https://www.jiji.com/rss/ranking.rdf
+- nome: sorae 宇宙へのポータルサイト
+  url: https://sorae.info/feed
+- nome: The korea Herald News Rss
+  url: https://www.koreaherald.com/rss/newsAll
+- nome: Korea Times News
+  url: https://feed.koreatimes.co.kr/k/allnews.xml
+- nome: 동아일보 | 전체 뉴스
+  url: https://rss.donga.com/total.xml
+- nome: РИА Новости
+  url: https://ria.ru/export/rss2/archive/index.xml
+- nome: Интерфакс
+  url: https://www.interfax.ru/rss
+- nome: N + 1 — главное издание о науке, технике и технологиях
+  url: https://nplus1.ru/rss
+- nome: BBC News
+  url: https://www.bbc.com/news/science_and_environment/rss.xml
+- nome: Space | The Guardian
+  url: https://www.theguardian.com/science/space/rss
+- nome: Al Jazeera – Breaking News, World News and Video from Al Jazeera
+  url: https://www.aljazeera.com/rss
+- nome: teleSUR English
+  url: https://www.telesurenglish.net/feed/
+- nome: Dawn - Tech
+  url: https://www.dawn.com/feeds/tech/
+- nome: Science News | Latest Updates on Scientific Discoveries | The Hindu
+  url: https://www.thehindu.com/sci-tech/science/feeder/default.rss
+- nome: Science | The Indian Express
+  url: https://indianexpress.com/section/technology/science/feed/
+- nome: Space Exploration .IN · India’s space journal
+  url: https://www.spaceexploration.in/rss.xml
+- nome: Stuff - /
+  url: https://www.stuff.co.nz/feed/
+- nome: Radio NZ Feed - 404
+  url: https://www.rnz.co.nz/rss/index.rdf
+- nome: 'Sci.News: Breaking Science News'
+  url: https://www.sci.news/feed/
+- nome: Earth.com
+  url: https://www.earth.com/rss/
+- nome: KeepTrack’ Articles
+  url: https://www.keeptrack.space/rss.xml
+- nome: SYFY Official Site
+  url: https://www.syfy.com/rss.xml
+- nome: Inverse
+  url: https://www.inverse.com/rss
+- nome: Popular Science
+  url: https://www.popsci.com/feed/
+- nome: Latest Content - Popular Mechanics
+  url: https://www.popularmechanics.com/rss/all.xml
+- nome: The Verge
+  url: https://www.theverge.com/rss/index.xml
+- nome: WIRED
+  url: https://www.wired.com/feed/rss
+- nome: Gizmodo
+  url: https://gizmodo.com/feed
+- nome: Engadget - Technology News & Expert Reviews
+  url: https://www.engadget.com/category/science/feed/
+- nome: DPReview
+  url: https://www.dpreview.com/feed/
+- nome: Space | smithsonianmag.com
+  url: https://www.smithsonianmag.com/rss/space/
+- nome: National Air and Space Museum
+  url: https://airandspace.si.edu/rss.xml
+- nome: Rubin Observatory
+  url: https://www.lsst.org/rss.xml
+- nome: Astronomy News & Astronomical Events | Sky & Telescope
+  url: https://skyandtelescope.org/astronomy-news/atom
+- nome: 'Google News Content : ScienceAlert : The Best in Science News and Amazing
+    Breakt'
+  url: https://www.sciencealert.com/feed/gn/
+- nome: Latest from Live Science
+  url: https://www.livescience.com/feeds.xml
+- nome: ESA Space News
+  url: https://www.esa.int/rssfeed/Our_Activities/Space_News
+- nome: ESA Space Science
+  url: https://www.esa.int/rssfeed/Our_Activities/Space_Science
+- nome: Scientific American
+  url: https://www.scientificamerican.com/platform/syndication/rss/
+- nome: Nature - Astronomy and astrophysics
+  url: https://www.nature.com/subjects/astronomy-and-astrophysics.rss
+- nome: Science (AAAS)
+  url: https://www.science.org/action/showFeed?type=etoc&feed=rss&jc=science
+- nome: JAXA Press Release
+  url: https://global.jaxa.jp/rss/press.rdf
+- nome: TASS
+  url: https://tass.com/rss/v2.xml
+- nome: Le Monde - Sciences
+  url: https://www.lemonde.fr/sciences/rss_full.xml
+- nome: Futura Sciences
+  url: https://www.futura-sciences.com/rss/actualites.xml
+- nome: Il Sole 24 ORE - Tecnologia
+  url: https://www.ilsole24ore.com/rss/tecnologia.xml
+- nome: ALMA Observatory
+  url: https://www.almaobservatory.org/en/feed/
+- nome: Via Satellite
+  url: https://www.satellitetoday.com/feed/

@@ -1,0 +1,55 @@
+# A ogni nuova versione (etichetta vAAAA.MM.GG-HHMM inviata da pubblica.bat) GitHub
+# prepara i due pacchetti e la pagina della versione in "Releases":
+# - ..._windows.zip  pronto all'uso, con Python e librerie già installati;
+# - ..._codice.zip   solo il codice, usato dal pulsante "Aggiorna" dell'app.
+name: Pubblica versione
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  pacchetti:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Scarica il codice
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Python (stessa versione del pacchetto pronto all'uso)
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - name: Crea i pacchetti
+        shell: pwsh
+        run: |
+          $versione = "${{ github.ref_name }}".Substring(1)
+          python strumenti/crea_pacchetti.py --versione $versione --uscita dist
+
+      - name: Note della versione
+        shell: pwsh
+        run: |
+          $nota = git tag -l --format='%(contents)' "${{ github.ref_name }}"
+          @"
+          $nota
+
+          ---
+          **Prima installazione:** scarica ``Generatore_caroselli_SEDS_UPO_windows.zip`` qui sotto, estrailo e fai doppio clic su ``avvia_app.bat``. Istruzioni complete nel file ``LEGGIMI.txt``.
+
+          **Hai già l'app:** apri Impostazioni e premi *Aggiorna ora*.
+          "@ | Out-File -Encoding utf8 note.md
+
+      - name: Pubblica la versione
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Versione ${{ github.ref_name }}
+          body_path: note.md
+          files: |
+            dist/Generatore_caroselli_SEDS_UPO_windows.zip
+            dist/Generatore_caroselli_SEDS_UPO_codice.zip

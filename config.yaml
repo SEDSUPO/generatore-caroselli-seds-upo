@@ -1,0 +1,38 @@
+# Configurazione applicazione generatore caroselli SEDS UPO
+# L'unica credenziale (GOOGLE_API_KEY) resta nel file .env, non qui.
+
+soglia_qualita: 7.0          # punteggio medio 0-10 sotto il quale una slide viene segnalata in QA
+max_caratteri_slide: 280     # limite copy per slide (Sezione richiesta nel prompt originale)
+max_caratteri_caption: 1600  # limite caption Instagram (corpo + firma + hashtag insieme)
+max_caratteri_notizia: 90    # limite titolo di ogni slide del carosello notizie
+min_slide: 5
+max_slide: 10
+
+# Cascata di modelli: se il primo è sovraccarico/irraggiungibile, si prova subito il
+# successivo nella lista (vedi src/gemini_client.py). Modificabile anche dall'app,
+# in Impostazioni. L'ordine conta: il primo è quello usato di default.
+modelli_testo: [gemini-3.6-flash, gemini-3.5-flash-lite, gemini-3.1-flash-lite]
+modelli_vision: [gemini-3.6-flash, gemini-3.5-flash-lite, gemini-3.1-flash-lite]
+# Sintesi vocale Gemini per i reel (opzionale: la voce gratuita Kokoro gira in locale)
+modelli_tts: [gemini-3.1-flash-tts-preview, gemini-2.5-flash-preview-tts]
+
+# Ogni giro prova già tutti i modelli sopra: con 3 modelli e retry_massimi 5 il caso
+# peggiore (tutti sovraccarichi) potrebbe superare i 15 minuti d'attesa. Abbassato
+# rispetto a prima che esistesse la cascata, quando era l'unica rete di sicurezza.
+retry_massimi: 2
+attesa_iniziale_secondi: 2   # backoff esponenziale: attesa * 2^tentativo (solo se TUTTI i modelli falliscono in un giro)
+
+# Notizie dai feed RSS (feeds.yaml): quante leggerne per feed, quante mostrarne in elenco
+# (le più recenti tra tutti i feed) e se tradurre i titoli in italiano (una sola chiamata Gemini).
+max_notizie_per_feed: 8
+max_notizie_totali: 150
+traduci_titoli_feed: true
+
+# Reel — modello Whisper per i sottotitoli (in locale, scaricato una volta in modelli/whisper/).
+# base: ~150 MB, veloce, meno preciso | small: ~480 MB, buon compromesso | medium: ~1.5 GB, lento.
+whisper_modello: small
+
+# Reel — YouTube: aggiornamento automatico di yt-dlp (controllo al massimo una volta al giorno,
+# e nuovo tentativo dopo aggiornamento se un download fallisce) e durata massima dei video.
+ytdlp_aggiornamento_automatico: true
+youtube_durata_massima_minuti: 30

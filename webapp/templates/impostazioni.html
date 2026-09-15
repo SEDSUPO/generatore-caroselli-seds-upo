@@ -1,0 +1,479 @@
+{% extends "base.html" %}
+{% block titolo %}Impostazioni — Generatore Caroselli{% endblock %}
+
+{% block contenuto %}
+<h1>Impostazioni</h1>
+<p class="sottotitolo">
+  L'unica credenziale richiesta è una API key gratuita di Google Gemini.
+  Ottienila su <a href="https://ai.google.dev" target="_blank" rel="noopener">ai.google.dev</a>
+  e incollala qui sotto: viene salvata nel file <code>.env</code> del progetto, mai altrove.
+</p>
+<div class="pannello pannello-aggiornamento" id="pannello-aggiornamento">
+  <div class="segmento-intestazione">
+    <div>
+      <h2 style="margin:0">Versione {{ versione }}</h2>
+      <p class="nota" id="stato-aggiornamento" style="margin:6px 0 0">Controllo degli aggiornamenti...</p>
+    </div>
+    <div class="riga-bottoni">
+      <button class="btn btn-secondario btn-piccolo" type="button" id="btn-cerca-aggiornamenti">Cerca aggiornamenti</button>
+      <button class="btn" type="button" id="btn-installa-aggiornamento" hidden>Aggiorna ora</button>
+    </div>
+  </div>
+  <div id="note-aggiornamento" hidden>
+    <div class="prompt-box" id="testo-note-aggiornamento" style="margin:14px 0 0;max-height:220px;overflow-y:auto"></div>
+    <p class="nota">L'app si chiude, si aggiorna e si riapre da sola. La tua chiave, i tuoi lavori e le tue impostazioni restano come sono.</p>
+  </div>
+</div>
+
+<div class="spinner-overlay" id="overlay-aggiornamento">
+  <div class="spinner"></div>
+  <p id="testo-overlay-aggiornamento">Aggiornamento in corso: l'app si chiude e si riapre da sola.<br>
+    Si apre una finestra con l'avanzamento; non chiudere questa pagina.</p>
+</div>
+
+<div class="pannello">
+  <div class="stato-chiave">
+    {% if configurata %}
+      <span class="badge badge-ok">Chiave configurata</span>
+    {% else %}
+      <span class="badge badge-avviso">Chiave non configurata</span>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{{ url_for('salva_impostazioni') }}">
+    <div class="campo">
+      <label for="api_key">GOOGLE_API_KEY</label>
+      <input type="password" id="api_key" name="api_key" placeholder="Incolla qui la tua API key" autocomplete="off">
+    </div>
+    <button class="btn" type="submit">Salva chiave</button>
+    {% if configurata %}
+      <button class="btn btn-secondario" type="button" id="btn-verifica">Verifica connessione</button>
+    {% endif %}
+  </form>
+
+  <div id="esito-verifica" class="esito-verifica"></div>
+</div>
+
+{% if configurata %}
+<div class="pannello">
+  <h2>Modelli Gemini</h2>
+  <p class="sottotitolo" style="margin-bottom:20px">
+    In cascata: se il primo modello è sovraccarico o irraggiungibile, l'app prova
+    automaticamente il successivo nella lista. L'ordine conta.
+  </p>
+
+  <div data-blocco-modelli="testo">
+    <h3 style="margin:0 0 10px">Testo (analisi, caption, notizie)</h3>
+    <ul class="lista-modelli" data-lista-modelli>
+      {% for m in modelli_testo %}
+      <li data-modello="{{ m }}">
+        <span class="lista-modelli-nome">{{ loop.index }}. {{ m }}</span>
+        <span class="lista-modelli-azioni">
+          <button type="button" data-azione="su" title="Sposta su" {{ 'disabled' if loop.first }}>↑</button>
+          <button type="button" data-azione="giu" title="Sposta giù" {{ 'disabled' if loop.last }}>↓</button>
+          <button type="button" data-azione="rimuovi" class="btn-pericolo" title="Rimuovi">✕</button>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    <div style="display:flex;gap:8px;margin:12px 0 28px">
+      <input type="text" data-input-nuovo-modello placeholder="es. gemini-3.6-flash" style="margin:0;flex:1">
+      <button class="btn btn-piccolo" type="button" data-btn-aggiungi>Aggiungi</button>
+    </div>
+  </div>
+
+  <div data-blocco-modelli="vision">
+    <h3 style="margin:0 0 10px">Vision (rilevamento layout, QA)</h3>
+    <ul class="lista-modelli" data-lista-modelli>
+      {% for m in modelli_vision %}
+      <li data-modello="{{ m }}">
+        <span class="lista-modelli-nome">{{ loop.index }}. {{ m }}</span>
+        <span class="lista-modelli-azioni">
+          <button type="button" data-azione="su" title="Sposta su" {{ 'disabled' if loop.first }}>↑</button>
+          <button type="button" data-azione="giu" title="Sposta giù" {{ 'disabled' if loop.last }}>↓</button>
+          <button type="button" data-azione="rimuovi" class="btn-pericolo" title="Rimuovi">✕</button>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    <div style="display:flex;gap:8px;margin:12px 0 0">
+      <input type="text" data-input-nuovo-modello placeholder="es. gemini-3.6-flash" style="margin:0;flex:1">
+      <button class="btn btn-piccolo" type="button" data-btn-aggiungi>Aggiungi</button>
+    </div>
+  </div>
+
+  <div data-blocco-modelli="tts" style="margin-top:28px">
+    <h3 style="margin:0 0 10px">Voce (sintesi vocale per i reel)</h3>
+    <ul class="lista-modelli" data-lista-modelli>
+      {% for m in modelli_tts %}
+      <li data-modello="{{ m }}">
+        <span class="lista-modelli-nome">{{ loop.index }}. {{ m }}</span>
+        <span class="lista-modelli-azioni">
+          <button type="button" data-azione="su" title="Sposta su" {{ 'disabled' if loop.first }}>↑</button>
+          <button type="button" data-azione="giu" title="Sposta giù" {{ 'disabled' if loop.last }}>↓</button>
+          <button type="button" data-azione="rimuovi" class="btn-pericolo" title="Rimuovi">✕</button>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    <div style="display:flex;gap:8px;margin:12px 0 0">
+      <input type="text" data-input-nuovo-modello placeholder="es. gemini-3.1-flash-tts-preview" style="margin:0;flex:1">
+      <button class="btn btn-piccolo" type="button" data-btn-aggiungi>Aggiungi</button>
+    </div>
+  </div>
+
+  <div id="esito-modelli" class="esito-verifica"></div>
+</div>
+
+<div class="pannello">
+  <h2>Testate per le notizie (feed RSS)</h2>
+  <p class="sottotitolo" style="margin-bottom:14px">
+    Da qui arrivano le notizie del carosello notizie e i suggerimenti di argomento per i reel.
+    Incolla l'indirizzo di un sito o di una sua sezione (anche una lista intera): l'app trova da sola il feed.
+  </p>
+  <details>
+    <summary class="nota" style="cursor:pointer">{{ feeds | length }} feed configurati — mostra l'elenco</summary>
+    <ul class="lista-modelli" style="margin-top:10px;max-height:360px;overflow-y:auto">
+      {% for f in feeds %}
+      <li data-feed="{{ f.url }}">
+        <span class="lista-modelli-nome" title="{{ f.url }}">{{ f.nome }}</span>
+        <span class="lista-modelli-azioni">
+          <button type="button" class="btn-pericolo" data-btn-rimuovi-feed title="Rimuovi">✕</button>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  <textarea id="nuovi-feed" rows="3" style="min-height:70px;margin:14px 0 8px" placeholder="https://www.esa.int/Newsroom, https://www.media.inaf.it/ ..."></textarea>
+  <button class="btn btn-piccolo" type="button" id="btn-aggiungi-feed">Cerca e aggiungi i feed</button>
+  <p id="esito-feed" class="esito-verifica" style="white-space:pre-line"></p>
+</div>
+
+<div class="pannello">
+  <h2>Reel: sottotitoli e download</h2>
+
+  <h3 style="margin:0 0 8px">Modello per i sottotitoli (Whisper)</h3>
+  <p class="nota" style="margin-bottom:10px">
+    Gira sul tuo computer, senza costi né quote. Si scarica una volta sola (in <code>modelli/</code>).
+  </p>
+  <div class="riga-query">
+    <select id="whisper-modello">
+      {% for nome, descrizione in modelli_whisper.items() %}
+        <option value="{{ nome }}" {{ 'selected' if nome == config.whisper_modello }}>{{ nome }} — {{ descrizione }}</option>
+      {% endfor %}
+    </select>
+    <span class="badge {{ 'badge-ok' if whisper_scaricato else 'badge-fase' }}" id="stato-whisper">
+      {{ 'Scaricato' if whisper_scaricato else 'Da scaricare' }}
+    </span>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-scarica-whisper" {{ 'hidden' if whisper_scaricato }}>Scarica ora</button>
+  </div>
+
+  <h3 style="margin:24px 0 8px">Voce gratuita (Kokoro)</h3>
+  <p class="nota" style="margin-bottom:10px">
+    Sintesi vocale sul tuo computer, senza quote. Il modello (~120 MB) si scarica da solo la prima volta
+    che lo usi, oppure subito da qui (in <code>modelli/</code>).
+  </p>
+  <div class="riga-bottoni">
+    <span class="badge {{ 'badge-ok' if kokoro_scaricato else 'badge-fase' }}" id="stato-kokoro">
+      {{ 'Scaricata' if kokoro_scaricato else 'Da scaricare' }}
+    </span>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-scarica-kokoro" {{ 'hidden' if kokoro_scaricato }}>Scarica ora</button>
+  </div>
+
+  <h3 style="margin:24px 0 8px">yt-dlp (download da YouTube)</h3>
+  <p class="nota" style="margin-bottom:10px">
+    YouTube cambia spesso: se i download smettono di funzionare, quasi sempre basta aggiornare yt-dlp.
+  </p>
+  <p style="margin:0 0 10px;font-size:0.9rem" id="versione-ytdlp">Controllo della versione...</p>
+  <div class="riga-bottoni">
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-aggiorna-ytdlp">Aggiorna ora</button>
+  </div>
+  <label class="spunta" style="margin-top:12px">
+    <input type="checkbox" id="ytdlp-automatico" {{ 'checked' if config.ytdlp_aggiornamento_automatico }}>
+    Aggiorna in automatico (controllo al massimo una volta al giorno, e se un download fallisce)
+  </label>
+  <label class="spunta">
+    Durata massima dei video da scaricare:
+    <input type="number" id="youtube-durata" min="1" max="240" value="{{ config.youtube_durata_massima_minuti }}"> minuti
+  </label>
+
+  <div class="riga-bottoni" style="margin-top:14px">
+    <button class="btn btn-piccolo" type="button" id="btn-salva-reel">Salva</button>
+  </div>
+  <p id="esito-reel" class="esito-verifica"></p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block script_coda %}
+<script src="{{ url_for('static', filename='reel.js') }}"></script>
+<script>
+  // ------------------------------------------------------------ aggiornamenti
+  const statoAggiornamento = document.getElementById("stato-aggiornamento");
+  const btnInstalla = document.getElementById("btn-installa-aggiornamento");
+
+  async function cercaAggiornamenti(forza) {
+    statoAggiornamento.textContent = "Controllo degli aggiornamenti...";
+    statoAggiornamento.style.color = "var(--muted)";
+    let dati;
+    try {
+      dati = await (await fetch(`/impostazioni/aggiornamento/controlla${forza ? "?forza=1" : ""}`)).json();
+    } catch (e) {
+      dati = { ok: false, messaggio: "Errore di rete." };
+    }
+    if (dati.sviluppo) {
+      statoAggiornamento.textContent = "Copia di sviluppo: le nuove versioni si pubblicano con pubblica.bat.";
+      document.getElementById("btn-cerca-aggiornamenti").hidden = true;
+      return;
+    }
+    if (!dati.ok) {
+      statoAggiornamento.textContent = dati.messaggio;
+      statoAggiornamento.style.color = "#ff8b83";
+      return;
+    }
+    btnInstalla.hidden = !dati.disponibile;
+    document.getElementById("note-aggiornamento").hidden = !dati.disponibile;
+    if (dati.disponibile) {
+      statoAggiornamento.textContent = `È disponibile la versione ${dati.ultima}.`;
+      statoAggiornamento.style.color = "var(--verde)";
+      document.getElementById("testo-note-aggiornamento").textContent = dati.note || "Nessuna nota per questa versione.";
+    } else {
+      statoAggiornamento.textContent = "Hai l'ultima versione.";
+    }
+  }
+
+  document.getElementById("btn-cerca-aggiornamenti").addEventListener("click", () => cercaAggiornamenti(true));
+  cercaAggiornamenti(false);
+
+  btnInstalla.addEventListener("click", async () => {
+    if (!confirm("Aggiornare adesso? L'app si chiude per qualche istante e si riapre da sola.")) return;
+    const versionePrima = {{ versione | tojson }};
+    const overlay = document.getElementById("overlay-aggiornamento");
+    overlay.classList.add("attivo");
+    const risposta = await chiamaApi("/impostazioni/aggiornamento/installa");
+    if (!risposta.ok) {
+      overlay.classList.remove("attivo");
+      return alert(risposta.messaggio);
+    }
+    // L'app si chiude e torna con la nuova versione: si aspetta che risponda di nuovo.
+    const inizio = Date.now();
+    const attendi = async () => {
+      try {
+        const dati = await (await fetch("/impostazioni/aggiornamento/versione", { cache: "no-store" })).json();
+        if (dati.versione !== versionePrima) {
+          window.location.reload();
+          return;
+        }
+      } catch (e) {
+        // app ancora chiusa: si riprova
+      }
+      if (Date.now() - inizio > 5 * 60 * 1000) {
+        document.getElementById("testo-overlay-aggiornamento").innerHTML =
+          "L'app non si è ancora riaperta.<br>Guarda la finestra dell'aggiornamento per eventuali errori, poi avvia avvia_app.bat.";
+        return;
+      }
+      setTimeout(attendi, 2000);
+    };
+    setTimeout(attendi, 4000);
+  });
+
+  const btnVerifica = document.getElementById("btn-verifica");
+  if (btnVerifica) {
+    btnVerifica.addEventListener("click", async () => {
+      const esito = document.getElementById("esito-verifica");
+      btnVerifica.disabled = true;
+      esito.textContent = "Verifica in corso...";
+      try {
+        const resp = await fetch("{{ url_for('verifica_chiave') }}", { method: "POST" });
+        const dati = await resp.json();
+        esito.textContent = dati.messaggio;
+        esito.style.color = dati.ok ? "var(--verde)" : "#ff8b83";
+      } catch (e) {
+        esito.textContent = "Errore di rete durante la verifica.";
+        esito.style.color = "#ff8b83";
+      } finally {
+        btnVerifica.disabled = false;
+      }
+    });
+  }
+
+  // ------------------------------------------------------------ reel
+  const esitoReel = document.getElementById("esito-reel");
+  function esitoImpostazioniReel(testo, ok) {
+    esitoReel.textContent = testo;
+    esitoReel.style.color = ok === null ? "var(--muted)" : ok ? "var(--verde)" : "#ff8b83";
+  }
+
+  async function aggiornaVersioneYtdlp() {
+    const el = document.getElementById("versione-ytdlp");
+    if (!el) return;
+    try {
+      const dati = await (await fetch("{{ url_for('stato_ytdlp') }}")).json();
+      if (!dati.installata) {
+        el.textContent = "yt-dlp non risulta installato: premi Aggiorna ora per installarlo.";
+      } else if (!dati.ultima) {
+        el.textContent = `Installata: ${dati.installata} (impossibile controllare l'ultima versione).`;
+      } else {
+        el.innerHTML = `Installata: <strong>${dati.installata}</strong> · ultima disponibile: ${dati.ultima} ` +
+          (dati.aggiornata ? '<span class="badge badge-ok">Aggiornato</span>' : '<span class="badge badge-avviso">Da aggiornare</span>');
+      }
+    } catch (e) {
+      el.textContent = "Impossibile controllare la versione di yt-dlp.";
+    }
+  }
+  aggiornaVersioneYtdlp();
+
+  async function eseguiLavoro(url, dati, bottone, testoAttesa) {
+    bottone.disabled = true;
+    esitoImpostazioniReel(testoAttesa, null);
+    const risposta = await chiamaApi(url, { dati });
+    if (!risposta.ok) {
+      bottone.disabled = false;
+      esitoImpostazioniReel(risposta.messaggio, false);
+      return false;
+    }
+    const lavoro = await seguiLavoro(risposta.chiave, (l) => esitoImpostazioniReel(l.fase + "...", null), 1500);
+    bottone.disabled = false;
+    esitoImpostazioniReel(lavoro.messaggio, lavoro.stato === "completato");
+    return lavoro.stato === "completato";
+  }
+
+  // ------------------------------------------------------------ feed
+  const esitoFeed = document.getElementById("esito-feed");
+  const btnAggiungiFeed = document.getElementById("btn-aggiungi-feed");
+  if (btnAggiungiFeed) {
+    btnAggiungiFeed.addEventListener("click", async () => {
+      const testo = document.getElementById("nuovi-feed").value;
+      btnAggiungiFeed.disabled = true;
+      esitoFeed.style.color = "var(--muted)";
+      esitoFeed.textContent = "Ricerca dei feed in corso...";
+      const risposta = await chiamaApi("{{ url_for('aggiungi_feed') }}", { dati: { testo } });
+      if (!risposta.ok) {
+        btnAggiungiFeed.disabled = false;
+        esitoFeed.textContent = risposta.messaggio;
+        esitoFeed.style.color = "#ff8b83";
+        return;
+      }
+      const lavoro = await seguiLavoro(risposta.chiave, (l) => (esitoFeed.textContent = l.fase + "..."), 1500);
+      btnAggiungiFeed.disabled = false;
+      esitoFeed.textContent = lavoro.messaggio + (lavoro.stato === "completato" ? "\nAggiorna la pagina per vedere l'elenco." : "");
+      esitoFeed.style.color = lavoro.stato === "completato" ? "var(--verde)" : "#ff8b83";
+    });
+    document.querySelectorAll("[data-btn-rimuovi-feed]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const li = btn.closest("li");
+        const risposta = await chiamaApi("{{ url_for('rimuovi_feed') }}", { dati: { url: li.dataset.feed } });
+        if (!risposta.ok) return alert(risposta.messaggio);
+        li.remove();
+      });
+    });
+  }
+
+  const btnAggiornaYtdlp = document.getElementById("btn-aggiorna-ytdlp");
+  if (btnAggiornaYtdlp) {
+    btnAggiornaYtdlp.addEventListener("click", async () => {
+      await eseguiLavoro("{{ url_for('aggiorna_ytdlp') }}", null, btnAggiornaYtdlp, "Aggiornamento in corso...");
+      aggiornaVersioneYtdlp();
+    });
+
+    const btnScaricaKokoro = document.getElementById("btn-scarica-kokoro");
+    btnScaricaKokoro.addEventListener("click", async () => {
+      const ok = await eseguiLavoro("{{ url_for('scarica_kokoro') }}", null, btnScaricaKokoro, "Download della voce gratuita...");
+      if (ok) {
+        document.getElementById("stato-kokoro").className = "badge badge-ok";
+        document.getElementById("stato-kokoro").textContent = "Scaricata";
+        btnScaricaKokoro.hidden = true;
+      }
+    });
+
+    const btnScaricaWhisper = document.getElementById("btn-scarica-whisper");
+    btnScaricaWhisper.addEventListener("click", async () => {
+      const modello = document.getElementById("whisper-modello").value;
+      const ok = await eseguiLavoro("{{ url_for('scarica_whisper') }}", { modello }, btnScaricaWhisper,
+        "Download del modello (può richiedere qualche minuto)...");
+      if (ok) {
+        document.getElementById("stato-whisper").className = "badge badge-ok";
+        document.getElementById("stato-whisper").textContent = "Scaricato";
+        btnScaricaWhisper.hidden = true;
+      }
+    });
+
+    document.getElementById("btn-salva-reel").addEventListener("click", async () => {
+      const risposta = await chiamaApi("{{ url_for('salva_impostazioni_reel') }}", {
+        dati: {
+          whisper_modello: document.getElementById("whisper-modello").value,
+          youtube_durata_massima_minuti: document.getElementById("youtube-durata").value,
+          ytdlp_aggiornamento_automatico: document.getElementById("ytdlp-automatico").checked ? "1" : "0",
+        },
+      });
+      esitoImpostazioniReel(risposta.messaggio, risposta.ok);
+      if (risposta.ok) {
+        const stato = document.getElementById("stato-whisper");
+        stato.className = "badge " + (risposta.whisper_scaricato ? "badge-ok" : "badge-fase");
+        stato.textContent = risposta.whisper_scaricato ? "Scaricato" : "Da scaricare";
+        btnScaricaWhisper.hidden = risposta.whisper_scaricato;
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-blocco-modelli]").forEach((blocco) => {
+    const tipo = blocco.dataset.bloccoModelli;
+    const esito = document.getElementById("esito-modelli");
+
+    blocco.querySelector("[data-btn-aggiungi]").addEventListener("click", async () => {
+      const input = blocco.querySelector("[data-input-nuovo-modello]");
+      const modello = input.value.trim();
+      if (!modello) return;
+
+      esito.textContent = "Verifica del modello in corso...";
+      esito.style.color = "var(--muted)";
+      try {
+        const formData = new FormData();
+        formData.append("modello", modello);
+        const resp = await fetch(`/impostazioni/modelli/${tipo}/aggiungi`, { method: "POST", body: formData });
+        const dati = await resp.json();
+        if (!dati.ok) {
+          esito.textContent = dati.messaggio;
+          esito.style.color = "#ff8b83";
+          return;
+        }
+        window.location.reload();
+      } catch (e) {
+        esito.textContent = "Errore di rete durante l'aggiunta del modello.";
+        esito.style.color = "#ff8b83";
+      }
+    });
+
+    blocco.querySelectorAll("[data-azione]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const li = btn.closest("li");
+        const modello = li.dataset.modello;
+        const azione = btn.dataset.azione;
+
+        const formData = new FormData();
+        formData.append("modello", modello);
+        let url = `/impostazioni/modelli/${tipo}/sposta`;
+
+        if (azione === "rimuovi") {
+          if (!confirm(`Rimuovere "${modello}" dalla lista?`)) return;
+          url = `/impostazioni/modelli/${tipo}/rimuovi`;
+        } else {
+          formData.append("direzione", azione);
+        }
+
+        try {
+          const resp = await fetch(url, { method: "POST", body: formData });
+          const dati = await resp.json();
+          if (!dati.ok) {
+            alert(dati.messaggio);
+            return;
+          }
+          window.location.reload();
+        } catch (e) {
+          alert("Errore di rete.");
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

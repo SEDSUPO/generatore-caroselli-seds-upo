@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block titolo %}Montaggio — {{ reel.nome_reel }}{% endblock %}
+
+{% block contenuto %}
+<h1>{{ reel.nome_reel }}</h1>
+<p class="sottotitolo" style="margin-bottom:16px">Voce, visivi, sottotitoli e musica diventano il video.</p>
+{% include "_passi_reel.html" %}
+
+{% if mancanze %}
+  <div class="pannello pannello-avviso">
+    <h2>Prima di montare manca ancora</h2>
+    <ul class="lista-mancanze">
+      {% for m in mancanze %}<li>{{ m }}</li>{% endfor %}
+    </ul>
+    <div class="riga-bottoni">
+      <a class="btn btn-secondario btn-piccolo" href="{{ url_for('reel_prod.registrazione', nome=reel.nome_reel) }}">Vai alla registrazione</a>
+      <a class="btn btn-secondario btn-piccolo" href="{{ url_for('reel_prod.visivi', nome=reel.nome_reel) }}">Vai ai visivi</a>
+    </div>
+  </div>
+{% endif %}
+
+<div class="pannello">
+  <div class="segmento-intestazione">
+    <h2 style="margin:0">Sequenza</h2>
+    <span class="durata-segmento">durata {{ durata_totale }}</span>
+  </div>
+  <div class="sequenza-blocchi">
+    {% for b in blocchi_view %}
+      <div class="blocco-sequenza">
+        <div class="miniatura-segmento">
+          {% if b.asset %}
+            <img src="{{ url_for('reel_prod.file_reel', nome=reel.nome_reel, tipo='media', file=b.asset.anteprima) }}" alt="">
+            {% if b.asset.tipo == 'video' %}<span class="badge-miniatura">VIDEO</span>{% endif %}
+          {% else %}
+            <span class="placeholder">Nessun visivo</span>
+          {% endif %}
+        </div>
+        <div>
+          <strong>{{ b.etichette }}</strong>
+          <p class="nota">da {{ b.inizio }} · {{ b.durata }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="pannello">
+  <h2>Opzioni</h2>
+  <label class="spunta">
+    <input type="checkbox" data-opzione="sottotitoli_attivi" {{ 'checked' if produzione.sottotitoli_attivi }}>
+    Sottotitoli animati (parola per parola, trascritti dalla tua voce)
+  </label>
+  <label class="spunta">
+    <input type="checkbox" data-opzione="titolo_hook_attivo" {{ 'checked' if produzione.titolo_hook_attivo }}>
+    Durante l'hook mostra il testo come titolo grande in alto
+  </label>
+
+  <h3 style="margin:22px 0 8px">Musica di sottofondo</h3>
+  <p class="nota" style="margin-bottom:10px">
+    Si abbassa da sola quando parli. I brani dell'archivio sono Creative Commons: autore e licenza
+    finiscono da soli nei crediti della caption.
+  </p>
+  {% if musica_url %}
+    <p style="margin:0 0 8px">
+      <strong>{{ produzione.musica_titolo or 'Brano caricato' }}</strong>
+      {% if produzione.musica_autore %}<span class="nota"> di {{ produzione.musica_autore }}</span>{% endif %}
+      {% if produzione.musica_licenza %}<span class="badge badge-fase">{{ produzione.musica_licenza }}</span>{% endif %}
+    </p>
+    <div class="riga-bottoni">
+      <audio controls preload="none" src="{{ musica_url }}"></audio>
+      <button class="btn btn-secondario btn-piccolo" type="button" id="btn-cambia-musica">Cambia brano</button>
+      <button class="btn btn-secondario btn-piccolo btn-pericolo" type="button" id="btn-togli-musica">Togli musica</button>
+    </div>
+    <label for="volume-musica" style="margin-top:14px">Volume della musica: <span id="valore-volume">{{ (produzione.musica_volume * 100) | round | int }}%</span></label>
+    <input type="range" id="volume-musica" min="0" max="0.5" step="0.01" value="{{ produzione.musica_volume }}">
+  {% endif %}
+  <div id="blocco-cerca-musica" {{ 'hidden' if musica_url }} style="margin-top:12px">
+    <div class="riga-query">
+      <input type="text" id="query-musica" value="{{ produzione.musica_query or 'ambient space' }}" placeholder="Genere o atmosfera, in inglese (es. ambient, cinematic)">
+      <button class="btn btn-piccolo" type="button" id="btn-cerca-musica">Cerca musica libera</button>
+    </div>
+    <label class="spunta">
+      <input type="checkbox" id="includi-nd"> Mostra anche le licenze ND (vietano le modifiche: il montaggio taglia e abbassa il brano, quindi è una zona grigia)
+    </label>
+    <div class="lista-brani" id="lista-brani"></div>
+    <p class="esito-verifica" id="esito-musica"></p>
+    <label class="dropzone" style="max-width:360px;margin-top:10px">
+      Oppure carica un tuo brano (MP3, WAV, M4A...)
+      <input type="file" accept="audio/*" id="input-musica">
+    </label>
+  </div>
+  <p class="esito-verifica" id="esito-opzioni"></p>
+</div>
+
+<div class="pannello">
+  <h2>Crea il video</h2>
+  <p class="nota" style="margin-bottom:14px">
+    L'anteprima (540p) è veloce: usala per controllare tempi e visivi. Il video finale (1080×1920) è quello
+    da pubblicare. La prima volta si scarica anche il modello per i sottotitoli.
+  </p>
+  <div class="riga-bottoni">
+    <button class="btn btn-secondario" type="button" data-monta="1" {{ 'disabled' if mancanze }}>Anteprima veloce</button>
+    <button class="btn" type="button" data-monta="0" {{ 'disabled' if mancanze }}>Video finale</button>
+  </div>
+  <div id="avanzamento-montaggio" hidden style="margin-top:18px">
+    <div class="riga-progresso"><span id="fase-montaggio">In avvio</span><span id="percentuale-montaggio">0%</span></div>
+    <div class="barra-progresso barra-grande"><div id="barra-montaggio" style="width:0%"></div></div>
+  </div>
+  <p class="esito-verifica" id="esito-montaggio" style="white-space:pre-line"></p>
+
+  <div class="griglia-video">
+    {% for chiave, titolo in [('anteprima', 'Anteprima'), ('finale', 'Video finale')] %}
+      {% if video[chiave] %}
+        <div>
+          <h3 style="margin:0 0 4px">{{ titolo }}</h3>
+          <p class="nota">creato il {{ video[chiave].creato_il }}</p>
+          <video controls playsinline preload="metadata" src="{{ video[chiave].url }}" class="video-reel"></video>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div>
+
+<div class="barra-azioni">
+  <a class="btn btn-secondario" href="{{ url_for('reel_prod.visivi', nome=reel.nome_reel) }}">← Visivi</a>
+  {% if video.finale %}
+    <a class="btn" href="{{ url_for('reel_prod.pubblica', nome=reel.nome_reel) }}">Avanti: copertina e caption →</a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script src="{{ url_for('static', filename='reel.js') }}"></script>
+<script>
+  const nomeReel = {{ reel.nome_reel | tojson }};
+  const chiaveLavoro = {{ chiave_lavoro | tojson }};
+  const esitoOpzioni = document.getElementById("esito-opzioni");
+
+  function mostraEsito(el, testo, ok) {
+    el.textContent = testo;
+    el.style.color = ok ? "var(--verde)" : "#ff8b83";
+  }
+
+  document.querySelectorAll("[data-opzione]").forEach((casella) => {
+    casella.addEventListener("change", async () => {
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/opzioni`, { dati: { [casella.dataset.opzione]: casella.checked ? "1" : "0" } });
+      mostraEsito(esitoOpzioni, risposta.ok ? "Salvato." : risposta.messaggio, risposta.ok);
+    });
+  });
+
+  const volume = document.getElementById("volume-musica");
+  if (volume) {
+    volume.addEventListener("input", () => {
+      document.getElementById("valore-volume").textContent = `${Math.round(volume.value * 100)}%`;
+    });
+    volume.addEventListener("change", async () => {
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/opzioni`, { dati: { musica_volume: volume.value } });
+      mostraEsito(esitoOpzioni, risposta.ok ? "Salvato." : risposta.messaggio, risposta.ok);
+    });
+  }
+
+  const inputMusica = document.getElementById("input-musica");
+  if (inputMusica) {
+    inputMusica.addEventListener("change", async () => {
+      const dati = new FormData();
+      dati.append("musica", inputMusica.files[0]);
+      esitoOpzioni.textContent = "Caricamento...";
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/musica`, { dati });
+      if (!risposta.ok) return mostraEsito(esitoOpzioni, risposta.messaggio, false);
+      ricaricaMantenendoPosizione();
+    });
+  }
+
+  // ------------------------------------------------------------ musica libera
+  const listaBrani = document.getElementById("lista-brani");
+  const esitoMusica = document.getElementById("esito-musica");
+  const lettore = new Audio();
+  let bottoneInAscolto = null;
+
+  function fermaAscolto() {
+    lettore.pause();
+    if (bottoneInAscolto) bottoneInAscolto.textContent = "▶";
+    bottoneInAscolto = null;
+  }
+  lettore.addEventListener("ended", fermaAscolto);
+
+  async function cercaMusica() {
+    const q = document.getElementById("query-musica").value.trim();
+    if (!q) return;
+    fermaAscolto();
+    listaBrani.innerHTML = "";
+    esitoMusica.textContent = "Ricerca in corso...";
+    esitoMusica.style.color = "var(--muted)";
+    const includiNd = document.getElementById("includi-nd").checked ? "1" : "0";
+    let dati;
+    try {
+      dati = await (await fetch(`/api/musica/cerca?q=${encodeURIComponent(q)}&includi_nd=${includiNd}`)).json();
+    } catch (e) {
+      dati = { ok: false, messaggio: "Errore di rete." };
+    }
+    if (!dati.ok) {
+      esitoMusica.textContent = dati.messaggio;
+      esitoMusica.style.color = "#ff8b83";
+      return;
+    }
+    esitoMusica.textContent = dati.brani.length ? "" : "Nessun brano: prova parole più generiche (es. ambient, electronic, piano) o includi le licenze ND.";
+    dati.brani.forEach((b) => {
+      const riga = document.createElement("div");
+      riga.className = "riga-brano";
+      const durata = b.durata ? `${Math.floor(b.durata / 60)}:${String(Math.round(b.durata % 60)).padStart(2, "0")}` : "";
+      const titolo = document.createElement("div");
+      titolo.className = "riga-brano-testo";
+      titolo.innerHTML = "<strong></strong><span class='nota'></span>";
+      titolo.querySelector("strong").textContent = b.titolo;
+      titolo.querySelector(".nota").textContent = [b.autore, durata, b.fonte].filter(Boolean).join(" · ");
+      riga.innerHTML = `<button class="btn btn-secondario btn-piccolo" type="button" title="Ascolta">▶</button>`;
+      riga.appendChild(titolo);
+      const licenza = document.createElement("span");
+      licenza.className = "badge " + (b.licenza_nd ? "badge-avviso" : "badge-fase");
+      licenza.textContent = b.licenza;
+      licenza.title = b.licenza_nc ? "NC: solo uso non commerciale" : "";
+      riga.appendChild(licenza);
+      const usa = document.createElement("button");
+      usa.className = "btn btn-piccolo";
+      usa.type = "button";
+      usa.textContent = "Usa";
+      riga.appendChild(usa);
+
+      const ascolta = riga.querySelector("button");
+      ascolta.addEventListener("click", () => {
+        if (bottoneInAscolto === ascolta) return fermaAscolto();
+        fermaAscolto();
+        lettore.src = b.url_audio;
+        lettore.play();
+        ascolta.textContent = "■";
+        bottoneInAscolto = ascolta;
+      });
+      usa.addEventListener("click", async () => {
+        fermaAscolto();
+        usa.disabled = true;
+        usa.textContent = "Download...";
+        const risposta = await chiamaApi(`/api/reel/${nomeReel}/musica/libera`, { dati: { id: b.id } });
+        if (!risposta.ok) {
+          usa.disabled = false;
+          usa.textContent = "Usa";
+          esitoMusica.textContent = risposta.messaggio;
+          esitoMusica.style.color = "#ff8b83";
+          return;
+        }
+        ricaricaMantenendoPosizione();
+      });
+      listaBrani.appendChild(riga);
+    });
+  }
+
+  document.getElementById("btn-cerca-musica").addEventListener("click", cercaMusica);
+  document.getElementById("query-musica").addEventListener("keydown", (e) => e.key === "Enter" && cercaMusica());
+  document.getElementById("includi-nd").addEventListener("change", cercaMusica);
+  const cambiaMusica = document.getElementById("btn-cambia-musica");
+  if (cambiaMusica) {
+    cambiaMusica.addEventListener("click", () => {
+      document.getElementById("blocco-cerca-musica").hidden = false;
+      cambiaMusica.hidden = true;
+      cercaMusica();
+    });
+  } else {
+    cercaMusica(); // nessun brano ancora scelto: i risultati sono già pronti all'apertura
+  }
+
+  const togliMusica = document.getElementById("btn-togli-musica");
+  if (togliMusica) {
+    togliMusica.addEventListener("click", async () => {
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/musica`, { metodo: "DELETE" });
+      if (!risposta.ok) return mostraEsito(esitoOpzioni, risposta.messaggio, false);
+      ricaricaMantenendoPosizione();
+    });
+  }
+
+  // ------------------------------------------------------------ montaggio
+  const bottoniMonta = document.querySelectorAll("[data-monta]");
+  const esitoMontaggio = document.getElementById("esito-montaggio");
+
+  async function segui() {
+    bottoniMonta.forEach((b) => (b.disabled = true));
+    document.getElementById("avanzamento-montaggio").hidden = false;
+    esitoMontaggio.textContent = "";
+    const lavoro = await seguiLavoro(chiaveLavoro, (l) => {
+      const percentuale = Math.round(l.avanzamento * 100);
+      document.getElementById("fase-montaggio").textContent = l.fase;
+      document.getElementById("percentuale-montaggio").textContent = `${percentuale}%`;
+      document.getElementById("barra-montaggio").style.width = `${percentuale}%`;
+    });
+    if (lavoro.stato === "completato") {
+      ricaricaMantenendoPosizione();
+      return;
+    }
+    document.getElementById("avanzamento-montaggio").hidden = true;
+    mostraEsito(esitoMontaggio, lavoro.messaggio, false);
+    bottoniMonta.forEach((b) => (b.disabled = {{ 'true' if mancanze else 'false' }}));
+  }
+
+  bottoniMonta.forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/monta`, { dati: { anteprima: btn.dataset.monta } });
+      if (!risposta.ok) return mostraEsito(esitoMontaggio, risposta.messaggio, false);
+      segui();
+    });
+  });
+
+  // Se un montaggio è già in corso (es. pagina ricaricata), riprende a seguirlo.
+  (async () => {
+    const resp = await fetch(`/api/lavoro?chiave=${encodeURIComponent(chiaveLavoro)}`);
+    const dati = await resp.json();
+    if (dati.lavoro && dati.lavoro.stato === "in_corso") segui();
+  })();
+</script>
+{% endblock %}

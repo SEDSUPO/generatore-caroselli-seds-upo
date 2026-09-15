@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block titolo %}Pubblica — {{ reel.nome_reel }}{% endblock %}
+
+{% block contenuto %}
+<h1>{{ reel.nome_reel }}</h1>
+<p class="sottotitolo" style="margin-bottom:16px">Copertina, caption e crediti: poi si pubblica a mano su Instagram.</p>
+{% include "_passi_reel.html" %}
+
+<div class="pannello">
+  <h2>Copertina</h2>
+  <div class="griglia-copertina">
+    <div>
+      <h3 style="margin:0 0 8px">1. Sfondo</h3>
+      <p class="nota" style="margin-bottom:10px">
+        Genera l'illustrazione con Nano Banana usando il prompt (stesso stile dei caroselli), oppure usa
+        un fotogramma del video.
+      </p>
+      <label for="soggetto-copertina">Soggetto dell'illustrazione (in inglese)</label>
+      <div class="riga-query">
+        <input type="text" id="soggetto-copertina" value="{{ produzione.soggetto_copertina or '' }}" placeholder="Vuoto = lo propone l'AI">
+        <button class="btn btn-secondario btn-piccolo" type="button" id="btn-prompt-copertina">
+          {{ 'Aggiorna prompt' if prompt_copertina else 'Genera prompt' }}
+        </button>
+      </div>
+      <div id="blocco-prompt" {{ '' if prompt_copertina else 'hidden' }}>
+        <div class="prompt-box" id="testo-prompt">{{ prompt_copertina or '' }}</div>
+        <button class="btn btn-secondario btn-piccolo" type="button" id="btn-copia-prompt">Copia prompt</button>
+      </div>
+
+      <div class="riga-bottoni" style="margin-top:16px">
+        <label class="btn btn-secondario btn-piccolo etichetta-file">
+          Carica l'immagine generata
+          <input type="file" accept="image/jpeg,image/png,image/webp" id="input-sfondo">
+        </label>
+      </div>
+
+      {% if video_url %}
+        <div class="scelta-fotogramma">
+          <video id="video-fotogramma" src="{{ video_url }}" preload="metadata" muted playsinline controls></video>
+          <button class="btn btn-secondario btn-piccolo" type="button" id="btn-usa-fotogramma">Usa questo fotogramma</button>
+        </div>
+      {% endif %}
+
+      <h3 style="margin:22px 0 8px">2. Titolo</h3>
+      <label for="titolo-copertina">Testo in copertina (**parola** per evidenziarla su un rettangolino rosso)</label>
+      <input type="text" id="titolo-copertina" value="{{ produzione.titolo_copertina }}" placeholder="es. Come si **lancia** un razzo?">
+      <button class="btn" type="button" id="btn-componi-copertina" {{ '' if ha_sfondo_copertina else 'disabled' }}>Aggiorna titolo</button>
+      <p class="esito-verifica" id="esito-copertina"></p>
+    </div>
+
+    <div>
+      <div class="anteprima-copertina">
+        {% if copertina_url %}
+          <img id="img-copertina" src="{{ copertina_url }}" alt="Copertina">
+        {% else %}
+          <img id="img-copertina" alt="Copertina" hidden>
+          <span class="placeholder" id="placeholder-copertina">La copertina apparirà qui</span>
+        {% endif %}
+        <div class="guida-griglia" title="Parte visibile nella griglia del profilo"></div>
+      </div>
+      <p class="nota">Il riquadro tratteggiato è quello visibile nella griglia del profilo.</p>
+    </div>
+  </div>
+</div>
+
+<div class="pannello">
+  <h2>Caption</h2>
+  <div class="campo">
+    <label for="autore">Nome autore</label>
+    <input type="text" id="autore" placeholder="es. Mario Rossi">
+  </div>
+  <button class="btn" type="button" id="btn-genera-caption">
+    {{ 'Rigenera caption' if caption_esistente else 'Genera caption' }}
+  </button>
+  <div id="blocco-caption" {{ '' if caption_esistente else 'hidden' }} style="margin-top:16px">
+    <div class="caption-box" id="testo-caption">{{ caption_esistente or '' }}</div>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-copia-caption">Copia caption</button>
+    <p id="contatore-caption" class="nota" style="margin-top:8px"></p>
+  </div>
+  <p class="nota" style="margin-top:12px">I crediti di immagini e video usati vengono aggiunti in fondo alla caption.</p>
+</div>
+
+{% if voci_ai %}
+<div class="pannello pannello-avviso">
+  <h2>Voce generata: attiva l'etichetta AI</h2>
+  <p style="margin:0 0 8px">
+    Nel video c'è una voce sintetica ({{ voci_ai | join(', ') }}). Quando pubblichi, nelle
+    impostazioni avanzate del reel attiva <strong>"Info sull'AI"</strong>: Meta la richiede per
+    l'audio realistico generato con l'intelligenza artificiale.
+  </p>
+  <p class="nota">La voce è indicata anche in crediti.txt nello ZIP.</p>
+</div>
+{% endif %}
+
+{% if crediti %}
+<div class="pannello">
+  <h2>Crediti completi</h2>
+  <div class="prompt-box">{{ crediti }}</div>
+</div>
+{% endif %}
+
+<div class="barra-azioni">
+  <a class="btn btn-secondario" href="{{ url_for('reel_prod.montaggio', nome=reel.nome_reel) }}">← Montaggio</a>
+  <a class="btn" href="{{ url_for('reel.scarica', nome=reel.nome_reel) }}">Scarica tutto (ZIP)</a>
+</div>
+
+<div class="spinner-overlay" id="overlay-attesa">
+  <div class="spinner"></div>
+  <p id="testo-overlay">Attendere...</p>
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script src="{{ url_for('static', filename='reel.js') }}"></script>
+<script>
+  const nomeReel = {{ reel.nome_reel | tojson }};
+  const limiteCaption = {{ limite_caption }};
+  const overlay = document.getElementById("overlay-attesa");
+  const esitoCopertina = document.getElementById("esito-copertina");
+
+  function attesa(testo) {
+    document.getElementById("testo-overlay").textContent = testo;
+    overlay.classList.add("attivo");
+  }
+  function fineAttesa() {
+    overlay.classList.remove("attivo");
+  }
+
+  // ------------------------------------------------------------ prompt
+  document.getElementById("btn-prompt-copertina").addEventListener("click", async (e) => {
+    const soggetto = document.getElementById("soggetto-copertina").value.trim();
+    attesa(soggetto ? "Preparazione del prompt..." : "L'AI sta scegliendo il soggetto...");
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/copertina/prompt`, { dati: { soggetto } });
+    fineAttesa();
+    if (!risposta.ok) return alert(risposta.messaggio);
+    document.getElementById("soggetto-copertina").value = risposta.soggetto;
+    document.getElementById("testo-prompt").textContent = risposta.prompt;
+    document.getElementById("blocco-prompt").hidden = false;
+    e.target.textContent = "Aggiorna prompt";
+  });
+  document.getElementById("btn-copia-prompt").addEventListener("click", (e) =>
+    copiaTesto(e.currentTarget, document.getElementById("testo-prompt").textContent)
+  );
+
+  // ------------------------------------------------------------ copertina
+  async function componi(dati) {
+    dati.append("titolo", document.getElementById("titolo-copertina").value);
+    attesa("Composizione della copertina...");
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/copertina`, { dati });
+    fineAttesa();
+    if (!risposta.ok) {
+      esitoCopertina.textContent = risposta.messaggio;
+      esitoCopertina.style.color = "#ff8b83";
+      return;
+    }
+    const img = document.getElementById("img-copertina");
+    img.src = risposta.url;
+    img.hidden = false;
+    const placeholder = document.getElementById("placeholder-copertina");
+    if (placeholder) placeholder.remove();
+    document.getElementById("btn-componi-copertina").disabled = false;
+    esitoCopertina.textContent = "Copertina aggiornata.";
+    esitoCopertina.style.color = "var(--verde)";
+  }
+
+  document.getElementById("input-sfondo").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const dati = new FormData();
+    dati.append("sorgente", "file");
+    dati.append("immagine", file);
+    componi(dati);
+    e.target.value = "";
+  });
+
+  const btnFotogramma = document.getElementById("btn-usa-fotogramma");
+  if (btnFotogramma) {
+    btnFotogramma.addEventListener("click", () => {
+      const dati = new FormData();
+      dati.append("sorgente", "fotogramma");
+      dati.append("secondo", document.getElementById("video-fotogramma").currentTime);
+      componi(dati);
+    });
+  }
+
+  document.getElementById("btn-componi-copertina").addEventListener("click", () => {
+    const dati = new FormData();
+    dati.append("sorgente", "esistente");
+    componi(dati);
+  });
+
+  // ------------------------------------------------------------ caption
+  function aggiornaContatore() {
+    const testo = document.getElementById("testo-caption").textContent;
+    const contatore = document.getElementById("contatore-caption");
+    const sopra = testo.length > limiteCaption;
+    contatore.textContent = `${testo.length}/${limiteCaption} caratteri${sopra ? " (sopra il limite)" : ""}`;
+    contatore.style.color = sopra ? "#ff8b83" : "var(--muted)";
+  }
+  aggiornaContatore();
+
+  document.getElementById("btn-genera-caption").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    attesa("Generazione della caption...");
+    const risposta = await chiamaApi(`/api/reel/${nomeReel}/caption`, { dati: { autore: document.getElementById("autore").value } });
+    fineAttesa();
+    if (!risposta.ok) return alert(risposta.messaggio);
+    document.getElementById("testo-caption").textContent = risposta.caption;
+    document.getElementById("blocco-caption").hidden = false;
+    btn.textContent = "Rigenera caption";
+    aggiornaContatore();
+  });
+  document.getElementById("btn-copia-caption").addEventListener("click", (e) =>
+    copiaTesto(e.currentTarget, document.getElementById("testo-caption").textContent)
+  );
+</script>
+{% endblock %}

@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block titolo %}Caroselli — SEDS UPO{% endblock %}
+
+{% block contenuto %}
+<h1>Carosello scientifico</h1>
+<p class="sottotitolo">
+  Incolla il testo grezzo della ricerca spaziale/aerospaziale: Gemini decide il numero di
+  slide, applica lo schema narrativo e genera i prompt immagine per Nano Banana.
+</p>
+
+<div class="pannello">
+  <form method="post" action="{{ url_for('nuovo_carosello') }}" id="form-nuovo">
+    <div class="campo">
+      <label for="nome">Titolo carosello</label>
+      <input type="text" id="nome" name="nome" placeholder="es. Vita extraterrestre: ipotesi e scoperte" required>
+      <p style="margin:-12px 0 18px;font-size:0.8rem;color:var(--muted)">
+        Diventa automaticamente il nome della cartella (es. "vita-extraterrestre-ipotesi-e-scoperte").
+      </p>
+    </div>
+    <div class="campo">
+      <label for="testo">Testo grezzo della ricerca</label>
+      <textarea id="testo" name="testo" placeholder="Incolla qui il testo della ricerca..." required></textarea>
+    </div>
+    <button class="btn" type="submit" id="btn-genera">Analizza e genera prompt</button>
+  </form>
+</div>
+
+<h2 style="margin-top:40px">I tuoi caroselli scientifici</h2>
+{% if caroselli %}
+  <div class="griglia-caroselli">
+    {% for c in caroselli %}
+      <div class="card-carosello">
+        <a class="card-titolo" href="{{ url_for('carosello_dettaglio', nome=c.nome) }}">
+          <h3>{{ c.nome }}</h3>
+          <p>{{ c.argomento }}</p>
+        </a>
+        <div class="riga-progresso">
+          <span>Immagini caricate</span>
+          <span>{{ c.immagini_presenti }}/{{ c.numero_slide }}</span>
+        </div>
+        <div class="barra-progresso">
+          <div style="width: {{ (c.immagini_presenti / c.numero_slide * 100) | round | int }}%"></div>
+        </div>
+        <div class="riga-progresso">
+          <span>Slide composte</span>
+          <span>{{ c.immagini_composte }}/{{ c.numero_slide }}</span>
+        </div>
+        <div class="barra-progresso">
+          <div style="width: {{ (c.immagini_composte / c.numero_slide * 100) | round | int }}%"></div>
+        </div>
+        <button class="btn btn-secondario btn-piccolo btn-pericolo btn-elimina" data-nome="{{ c.nome }}" type="button" style="margin-top:8px">
+          Elimina
+        </button>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="sottotitolo">Nessun carosello ancora creato.</p>
+{% endif %}
+
+<h1 style="margin-top:56px">Carosello notizie</h1>
+<p class="sottotitolo">
+  Raccogli più notizie in un unico carosello: incolla l'URL di ciascuna, Gemini legge la
+  pagina e scrive un titolo breve — la foto viene suggerita automaticamente ma resta sempre
+  sostituibile. Nessun prompt immagine da generare.
+</p>
+
+<div class="pannello">
+  <form method="post" action="{{ url_for('notizie.nuovo_carosello') }}">
+    <div class="campo">
+      <label for="nome-notizie">Titolo carosello notizie</label>
+      <input type="text" id="nome-notizie" name="nome" placeholder="es. Rassegna spaziale settimanale" required>
+    </div>
+    <button class="btn" type="submit">Crea carosello notizie</button>
+  </form>
+</div>
+
+<h2 style="margin-top:40px">I tuoi caroselli notizie</h2>
+{% if caroselli_notizie %}
+  <div class="griglia-caroselli">
+    {% for c in caroselli_notizie %}
+      <div class="card-carosello">
+        <a class="card-titolo" href="{{ url_for('notizie.dettaglio', nome=c.nome) }}">
+          <h3>{{ c.nome }}</h3>
+          <p>{{ c.numero_notizie }} notizie</p>
+        </a>
+        <div class="riga-progresso">
+          <span>Slide composte</span>
+          <span>{{ c.composte }}/{{ c.numero_notizie }}</span>
+        </div>
+        <div class="barra-progresso">
+          <div style="width: {{ ((c.composte / c.numero_notizie * 100) | round | int) if c.numero_notizie else 0 }}%"></div>
+        </div>
+        <button class="btn btn-secondario btn-piccolo btn-pericolo btn-elimina-notizie" data-nome="{{ c.nome }}" type="button" style="margin-top:8px">
+          Elimina
+        </button>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="sottotitolo">Nessun carosello notizie ancora creato.</p>
+{% endif %}
+
+<h1 style="margin-top:56px">Creatore Reel</h1>
+<p class="sottotitolo">
+  Un argomento (scritto a mano o scelto tra i suggerimenti trovati sul web) diventa un
+  copione completo per un reel: hook, scene con indicazioni visive, chiusura con invito
+  ad azione, e una stima della durata parlata.
+</p>
+
+<div class="pannello">
+  <form method="post" action="{{ url_for('reel.nuovo_reel') }}" id="form-nuovo-reel">
+    <div class="campo">
+      <label for="nome-reel">Titolo reel</label>
+      <input type="text" id="nome-reel" name="nome" placeholder="es. Come funziona un lancio" required>
+    </div>
+    <div class="campo">
+      <label for="argomento-reel">Argomento</label>
+      <input type="text" id="argomento-reel" name="argomento" placeholder="es. Come funziona il lancio di un razzo, dal decollo all'orbita" required>
+    </div>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-suggerisci-topic">Suggerisci argomenti (dalle ultime notizie)</button>
+    <button class="btn btn-secondario btn-piccolo" type="button" id="btn-mostra-prompt">Mostra prompt</button>
+
+    <div id="blocco-prompt-topic" hidden style="margin-top:12px">
+      <div class="prompt-box">{{ prompt_suggerisci_topic }}</div>
+      <button class="btn btn-secondario btn-piccolo" type="button" data-btn-copia data-prompt="{{ prompt_suggerisci_topic }}">Copia prompt</button>
+      <p style="font-size:0.78rem;color:var(--muted);margin:6px 0 0">
+        "Suggerisci argomenti" parte dalle notizie dei feed configurati in Impostazioni. Se non
+        funziona, incolla questo prompt in un'altra chat con ricerca web (es. l'app Gemini),
+        poi scrivi l'argomento scelto qui sopra a mano.
+      </p>
+    </div>
+
+    <div id="lista-topic" style="margin-top:12px"></div>
+    <div style="margin-top:16px">
+      <button class="btn" type="submit" id="btn-genera-reel">Genera copione</button>
+    </div>
+  </form>
+</div>
+
+<h2 style="margin-top:40px">I tuoi reel</h2>
+{% if reel %}
+  <div class="griglia-caroselli">
+    {% for r in reel %}
+      <div class="card-carosello">
+        <a class="card-titolo" href="{{ url_for('reel.dettaglio', nome=r.nome) }}">
+          <h3>{{ r.nome }}</h3>
+          <p>{{ r.argomento }}</p>
+        </a>
+        <div class="riga-progresso">
+          <span>{{ r.numero_scene }} scene</span>
+          <span style="color: {{ 'var(--verde)' if r.durata_ok else 'var(--coral)' }}">~{{ r.durata }}</span>
+        </div>
+        {% if r.video_pronto %}<span class="badge badge-ok" style="align-self:flex-start">Video pronto</span>{% endif %}
+        <button class="btn btn-secondario btn-piccolo btn-pericolo btn-elimina-reel" data-nome="{{ r.nome }}" type="button" style="margin-top:8px">
+          Elimina
+        </button>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="sottotitolo">Nessun reel ancora creato.</p>
+{% endif %}
+
+<div class="spinner-overlay" id="overlay-attesa">
+  <div class="spinner"></div>
+  <p id="testo-overlay">Analisi del testo con Gemini in corso...<br>Può richiedere fino a un minuto.</p>
+</div>
+{% endblock %}
+
+{% block script_coda %}
+<script>
+  const overlay = document.getElementById("overlay-attesa");
+  const testoOverlay = document.getElementById("testo-overlay");
+
+  function mostraOverlay(testo) {
+    testoOverlay.innerHTML = testo;
+    overlay.classList.add("attivo");
+  }
+
+  document.getElementById("form-nuovo").addEventListener("submit", () => {
+    mostraOverlay("Analisi del testo con Gemini in corso...<br>Può richiedere fino a un minuto.");
+    document.getElementById("btn-genera").disabled = true;
+  });
+
+  document.getElementById("form-nuovo-reel").addEventListener("submit", () => {
+    mostraOverlay("Generazione del copione in corso...<br>Può richiedere fino a un minuto.");
+    document.getElementById("btn-genera-reel").disabled = true;
+  });
+
+  document.getElementById("btn-mostra-prompt").addEventListener("click", () => {
+    const blocco = document.getElementById("blocco-prompt-topic");
+    blocco.hidden = !blocco.hidden;
+    document.getElementById("btn-mostra-prompt").textContent = blocco.hidden ? "Mostra prompt" : "Nascondi prompt";
+  });
+
+  document.querySelectorAll("[data-btn-copia]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(btn.dataset.prompt);
+      const originale = btn.textContent;
+      btn.textContent = "Copiato!";
+      setTimeout(() => (btn.textContent = originale), 1500);
+    });
+  });
+
+  document.getElementById("btn-suggerisci-topic").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-suggerisci-topic");
+    const lista = document.getElementById("lista-topic");
+    btn.disabled = true;
+    lista.innerHTML = '<p class="sottotitolo" style="margin:8px 0 0">Lettura delle ultime notizie delle testate spaziali...<br>Di solito bastano pochi secondi: se fallisce, inserisci l\'argomento a mano.</p>';
+    try {
+      const resp = await fetch("{{ url_for('reel.suggerisci_topic_route') }}", { method: "POST" });
+      const dati = await resp.json();
+      if (!dati.ok) {
+        lista.innerHTML = `<p class="sottotitolo" style="margin:8px 0 0;color:#ff8b83">${dati.messaggio}</p>`;
+        document.getElementById("blocco-prompt-topic").hidden = false;
+        document.getElementById("btn-mostra-prompt").textContent = "Nascondi prompt";
+        return;
+      }
+      lista.innerHTML = "";
+      dati.topic.forEach((t) => {
+        const riga = document.createElement("div");
+        riga.className = "pannello";
+        riga.style.cssText = "padding:12px;margin-bottom:8px;cursor:pointer";
+        riga.innerHTML = `<strong>${t.titolo}</strong> <span class="badge badge-fase">${t.tipo.replace('_', ' ')}</span><p style="margin:6px 0 0;color:var(--muted);font-size:0.85rem">${t.perche_interessante}</p>`;
+        riga.addEventListener("click", () => {
+          document.getElementById("argomento-reel").value = t.titolo;
+        });
+        lista.appendChild(riga);
+      });
+    } catch (e) {
+      lista.innerHTML = '<p class="sottotitolo" style="margin:8px 0 0;color:#ff8b83">Errore di rete durante la ricerca.</p>';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  function collegaEliminazione(selettore, urlBase) {
+    document.querySelectorAll(selettore).forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const nome = btn.dataset.nome;
+        if (!confirm(`Eliminare definitivamente il carosello "${nome}"? L'azione non è reversibile.`)) {
+          return;
+        }
+        try {
+          const resp = await fetch(`${urlBase}/${nome}`, { method: "DELETE" });
+          const dati = await resp.json();
+          if (!dati.ok) {
+            alert(dati.messaggio);
+            return;
+          }
+          window.location.reload();
+        } catch (e) {
+          alert("Errore di rete durante l'eliminazione.");
+        }
+      });
+    });
+  }
+
+  collegaEliminazione(".btn-elimina", "/api/carosello");
+  collegaEliminazione(".btn-elimina-notizie", "/api/notizie");
+  collegaEliminazione(".btn-elimina-reel", "/api/reel");
+</script>
+{% endblock %}

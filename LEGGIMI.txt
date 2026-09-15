@@ -1,0 +1,120 @@
+GENERATORE CAROSELLI SEDS UPO
+Istruzioni per installarlo e usarlo sul tuo computer
+=====================================================
+
+L'app prepara i contenuti Instagram di SEDS UPO: caroselli scientifici, caroselli
+di notizie e reel (copione, voce, immagini, montaggio video, copertina e caption).
+Gira sul tuo computer e si usa dal browser. La pubblicazione su Instagram resta
+manuale: l'app ti dà i file pronti da caricare.
+
+
+COSA SERVE
+----------
+- Un computer Windows 10 o 11.
+- Una connessione a internet.
+- Circa 2 GB di spazio libero.
+- Un account Google, per ottenere la chiave gratuita di Gemini (vedi sotto).
+Non serve installare Python né altro: è già tutto dentro il pacchetto.
+
+
+INSTALLAZIONE
+-------------
+1. SCARICA IL PACCHETTO
+   Apri  https://github.com/SEDSUPO/generatore-caroselli-seds-upo/releases/latest
+   e in fondo, sotto "Assets", scarica
+       Generatore_caroselli_SEDS_UPO_windows.zip
+   (circa 200 MB).
+
+2. ESTRAI LO ZIP
+   - Fai clic destro sul file scaricato e scegli "Estrai tutto...".
+   - Scegli una cartella con un percorso corto che non sposterai più, per
+     esempio Documenti (le cartelle troppo "in profondità" danno problemi).
+
+3. AVVIA L'APP
+   - Apri la cartella "Generatore_caroselli_SEDS_UPO" e fai doppio clic su
+       avvia_app.bat
+   - Se Windows mostra "PC protetto da Windows", premi "Ulteriori informazioni"
+     e poi "Esegui comunque".
+   - Si apre una finestra nera e poi il browser su http://127.0.0.1:5000
+     (se il browser non si apre da solo, copia quell'indirizzo nella barra).
+
+
+PRIMO AVVIO: LA CHIAVE DI GEMINI
+--------------------------------
+L'app usa Gemini, l'intelligenza artificiale di Google, con una chiave gratuita
+che è solo tua. Al primo avvio l'app ti porta su Impostazioni.
+
+1. Vai su https://aistudio.google.com/apikey ed entra con il tuo account Google.
+2. Premi "Create API key" (o "Crea chiave API") e copia la chiave.
+3. Nell'app incolla la chiave nel campo GOOGLE_API_KEY e premi "Salva chiave".
+   "Verifica connessione" ti conferma che funziona.
+
+La chiave resta salvata solo sul tuo computer, nel file .env dentro la cartella
+dell'app. Non condividerla con nessuno.
+
+
+USO DI TUTTI I GIORNI
+---------------------
+- Per aprire l'app: doppio clic su  avvia_app.bat
+- Lascia aperta la finestra nera mentre lavori: è l'app che gira.
+  Chiudendola, l'app si spegne.
+- Quello che crei resta nella cartella dell'app (reel\, output\, output_notizie\),
+  ma di solito non serve aprirla: ogni pagina ha il pulsante per scaricare lo ZIP
+  pronto da pubblicare.
+
+La prima volta che usi alcune funzioni l'app scarica dei file in più, una volta
+sola (attendi senza chiudere):
+- i sottotitoli dei reel (modello Whisper, circa 500 MB) al primo montaggio;
+- la voce gratuita dei reel (Kokoro, circa 120 MB) alla prima voce generata.
+
+La quota gratuita di Gemini ha un limite di richieste al giorno. Se l'app dice
+"quota esaurita" (errore 429), passa da sola ai modelli di riserva; se sono
+esauriti anche quelli, riprova il giorno dopo.
+
+
+AGGIORNARE
+----------
+Non devi scaricare niente a mano: apri Impostazioni. In alto l'app ti dice se c'è
+una versione nuova e cosa cambia. Premi "Aggiorna ora": l'app si chiude, compare
+una finestra con l'avanzamento e dopo pochi secondi l'app si riapre aggiornata.
+Restano come sono la tua chiave, i tuoi lavori, i modelli già scaricati e le tue
+impostazioni (modelli Gemini, testate delle notizie).
+
+Se dopo un aggiornamento qualcosa non va, puoi tornare alla versione precedente:
+apri la cartella dell'app, clicca sulla barra dell'indirizzo, scrivi
+    cmd /c aggiorna.bat --ripristina
+e premi Invio.
+
+
+PROBLEMI
+--------
+"PC protetto da Windows" aprendo avvia_app.bat
+   Premi "Ulteriori informazioni" e poi "Esegui comunque". Succede con i file
+   scaricati da internet che non hanno una firma digitale.
+
+"La cartella dell'app si trova in un percorso troppo lungo"
+   Sposta la cartella Generatore_caroselli_SEDS_UPO in Documenti o direttamente
+   in C:\ e riavvia.
+
+Il browser dice che la pagina non è raggiungibile
+   Controlla che la finestra nera di avvia_app.bat sia ancora aperta. Se vedi
+   un errore sulla porta 5000 già in uso, l'app è già aperta in un'altra
+   finestra: chiudi le finestre nere e riavvia.
+
+"Aggiorna ora" dà un errore
+   Controlla la connessione. Se la finestra dell'aggiornamento mostra un errore,
+   leggilo, chiudila e avvia l'app con avvia_app.bat: la versione precedente
+   resta funzionante. Puoi anche fare doppio clic su aggiorna.bat.
+
+Il download da YouTube non funziona
+   YouTube cambia spesso: in Impostazioni premi "Aggiorna ora" nella sezione
+   yt-dlp e riprova.
+
+Il microfono non registra
+   Usa Chrome o Edge e, quando il browser chiede il permesso per il microfono,
+   premi "Consenti". Se l'hai negato, clicca sull'icona a sinistra
+   dell'indirizzo e riattiva il microfono.
+
+
+Guida completa a tutte le funzioni: README.md, oppure la pagina del progetto
+https://github.com/SEDSUPO/generatore-caroselli-seds-upo

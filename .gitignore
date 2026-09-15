@@ -1,0 +1,28 @@
+# --- Chiavi e dati personali: MAI nel repository ---------------------------
+.env
+reel/
+prompts/
+input_immagini/
+output/
+notizie/
+input_immagini_notizie/
+output_notizie/
+
+# Materiale di lavoro solo per chi sviluppa (resta sul PC)
+design_system.md
+
+# --- File generati o scaricati dall'app ---------------------------------------
+modelli/
+.stato/
+.aggiornamenti/
+versione.txt
+
+# --- Ambienti Python, pacchetti, prove -----------------------------------------
+__pycache__/
+*.pyc
+.venv/
+venv/
+python/
+dist/
+*.zip
+_prova*/

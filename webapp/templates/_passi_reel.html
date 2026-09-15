@@ -1,0 +1,16 @@
+{# Barra dei passi del reel. Richiede: reel, passi (dict passo -> completo), passo_attivo. #}
+{% set elenco_passi = [
+  ("copione", "Copione", url_for('reel.dettaglio', nome=reel.nome_reel)),
+  ("registrazione", "Registrazione", url_for('reel_prod.registrazione', nome=reel.nome_reel)),
+  ("visivi", "Visivi", url_for('reel_prod.visivi', nome=reel.nome_reel)),
+  ("montaggio", "Montaggio", url_for('reel_prod.montaggio', nome=reel.nome_reel)),
+  ("pubblica", "Pubblica", url_for('reel_prod.pubblica', nome=reel.nome_reel)),
+] %}
+<nav class="passi-reel">
+  {% for chiave, etichetta, link in elenco_passi %}
+    <a href="{{ link }}" class="passo {{ 'attivo' if chiave == passo_attivo }} {{ 'completo' if passi[chiave] }}">
+      <span class="passo-numero">{{ '✓' if passi[chiave] else loop.index }}</span>
+      {{ etichetta }}
+    </a>
+  {% endfor %}
+</nav>
