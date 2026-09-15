@@ -86,7 +86,11 @@ def main() -> int:
 
     print("\nInvio a GitHub...")
     ramo = git("rev-parse", "--abbrev-ref", "HEAD")
-    esito = subprocess.run(["git", "push", "origin", ramo, f"v{versione}"], cwd=ROOT)
+    # Prima il codice, poi l'etichetta, in due invii separati: inviati insieme, GitHub a
+    # volte non avvia il workflow della versione (osservato sul primo invio).
+    esito = subprocess.run(["git", "push", "origin", ramo], cwd=ROOT)
+    if esito.returncode == 0:
+        esito = subprocess.run(["git", "push", "origin", f"v{versione}"], cwd=ROOT)
     if esito.returncode != 0:
         git("tag", "-d", f"v{versione}", controlla=False)
         raise SystemExit("Invio non riuscito (connessione o login a GitHub). Le modifiche restano salvate: riprova.")

@@ -7,6 +7,9 @@ name: Pubblica versione
 on:
   push:
     tags: ["v*"]
+  # Riavvio manuale da GitHub (Actions > Pubblica versione > Run workflow), scegliendo
+  # l'etichetta della versione da ricostruire.
+  workflow_dispatch:
 
 permissions:
   contents: write
