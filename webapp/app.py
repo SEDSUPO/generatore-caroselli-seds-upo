@@ -277,6 +277,7 @@ def installa_aggiornamento():
         [sys.executable, str(Path(aggiorna_app.__file__)), "--automatico", "--riavvia"],
         cwd=Path(aggiorna_app.__file__).parent,
         creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+        env=aggiorna_app.ambiente_pulito(),
     )
     # Il tempo di mandare la risposta alla pagina, poi l'app si chiude (codice 0: anche
     # il processo che sorveglia i riavvii automatici termina, invece di rilanciarla).

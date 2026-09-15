@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import socket
 import threading
 import webbrowser
 
@@ -16,7 +17,24 @@ def _apri_browser() -> None:
     webbrowser.open(f"http://{HOST}:{PORT}/")
 
 
+def _ignora_variabili_werkzeug_scadute() -> None:
+    """Quando l'app si riavvia dopo un aggiornamento, il nuovo processo può ereditare
+    le variabili interne del riavvio automatico di Werkzeug dall'app appena chiusa:
+    WERKZEUG_SERVER_FD indica una connessione che non esiste più, e l'avvio fallirebbe
+    con "WinError 10038". Una connessione valida si lascia (è il normale riavvio
+    automatico), una scaduta si scarta e l'app parte da zero."""
+    descrittore = os.environ.get("WERKZEUG_SERVER_FD")
+    if descrittore is None:
+        return
+    try:
+        socket.fromfd(int(descrittore), socket.AF_INET, socket.SOCK_STREAM).close()
+    except (OSError, ValueError):
+        os.environ.pop("WERKZEUG_SERVER_FD", None)
+        os.environ.pop("WERKZEUG_RUN_MAIN", None)
+
+
 if __name__ == "__main__":
+    _ignora_variabili_werkzeug_scadute()
     # use_reloader=True: riavvia da solo il processo quando un file .py cambia (Flask
     # in debug=False mette anche in cache i template .html, risolto separatamente in
     # webapp/app.py con TEMPLATES_AUTO_RELOAD) — niente più "chiudi e rilancia a mano".

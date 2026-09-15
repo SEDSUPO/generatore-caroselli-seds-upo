@@ -209,8 +209,16 @@ def _python_app() -> list[str]:
     return [sys.executable]
 
 
+def ambiente_pulito(**aggiunte: str) -> dict[str, str]:
+    """Variabili d'ambiente senza quelle interne del riavvio automatico di Werkzeug:
+    ereditate dall'app appena chiusa, farebbero fallire l'avvio della nuova."""
+    ambiente = {k: v for k, v in os.environ.items() if not k.startswith("WERKZEUG_")}
+    ambiente.update(aggiunte)
+    return ambiente
+
+
 def riavvia_app() -> None:
-    ambiente = dict(os.environ, NON_APRIRE_BROWSER="1")  # la pagina dell'app si ricarica da sola
+    ambiente = ambiente_pulito(NON_APRIRE_BROWSER="1")  # la pagina dell'app si ricarica da sola
     subprocess.Popen(["cmd", "/c", "start", "", str(ROOT / "avvia_app.bat")], cwd=ROOT, env=ambiente)
 
 
