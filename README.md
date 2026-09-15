@@ -53,8 +53,10 @@ versione in *Releases* con due file (circa 10 minuti):
 - `..._codice.zip`: solo il codice + `versione.txt`, usato dall'aggiornamento.
 
 **Aggiornamento dall'app** (`aggiorna_app.py`, solo libreria standard, così funziona anche
-se le librerie dell'app sono rotte): Impostazioni legge l'ultima release dall'API di
-GitHub (senza login, risposta tenuta 10 minuti). *Aggiorna ora* avvia `aggiorna_app.py
+se le librerie dell'app sono rotte): Impostazioni legge l'ultima release dagli indirizzi pubblici di
+GitHub (`/releases/latest` e `/releases/download/...`), non dall'API, che senza login
+concede solo 60 richieste l'ora per connessione (poche su una rete condivisa); la nota
+della versione è allegata come `nota.txt`. Risposta tenuta 10 minuti. *Aggiorna ora* avvia `aggiorna_app.py
 --automatico --riavvia` in una finestra sua e chiude l'app (`os._exit(0)`: con codice 0
 termina anche il processo che sorveglia i riavvii di Flask). L'aggiornamento aspetta che
 non ci siano più processi Python dell'app, salva il codice attuale in `.aggiornamenti/`

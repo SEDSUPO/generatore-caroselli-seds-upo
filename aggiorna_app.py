@@ -22,14 +22,15 @@ rotto le librerie dell'app.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
+import re
 import shutil
 import socket
 import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from datetime import datetime
@@ -79,31 +80,50 @@ def e_piu_recente(nuova: str, attuale: str) -> bool:
     return attuale not in ("sviluppo", "sconosciuta") and nuova > attuale
 
 
+NOME_NOTA = "nota.txt"
+
+
+def _apri(url: str, timeout: float):
+    richiesta = urllib.request.Request(url, headers={"User-Agent": "Generatore-Caroselli-SEDS-UPO"})
+    return urllib.request.urlopen(richiesta, timeout=timeout)
+
+
 def ultima_versione_github(timeout: float = 15) -> dict:
-    """{versione, note, data, pagina, url_codice} dell'ultima versione pubblicata."""
-    richiesta = urllib.request.Request(
-        f"https://api.github.com/repos/{REPOSITORY_GITHUB}/releases/latest",
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "Generatore-Caroselli-SEDS-UPO"},
-    )
+    """{versione, note, pagina, url_codice} dell'ultima versione pubblicata.
+
+    Senza l'API di GitHub, che senza login concede 60 richieste l'ora per connessione:
+    su una rete condivisa (es. università) il limite si esaurisce in fretta. Si usano
+    invece gli indirizzi pubblici, senza limiti: /releases/latest rimanda alla pagina
+    dell'ultima versione (/releases/tag/vX), e i file allegati si scaricano da
+    /releases/download/vX/<nome>. La nota della versione è allegata come nota.txt.
+    """
+    base = f"https://github.com/{REPOSITORY_GITHUB}/releases"
     try:
-        with urllib.request.urlopen(richiesta, timeout=timeout) as risposta:
-            dati = json.load(risposta)
+        with _apri(f"{base}/latest", timeout) as risposta:
+            indirizzo_finale = risposta.geturl()
     except urllib.error.HTTPError as e:
         if e.code == 404:
-            raise ErroreAggiornamento("Nessuna versione pubblicata su GitHub.") from e
+            raise ErroreAggiornamento("Repository non trovato su GitHub.") from e
         raise ErroreAggiornamento(f"GitHub non risponde come previsto (errore {e.code}).") from e
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise ErroreAggiornamento("GitHub non raggiungibile: controlla la connessione.") from e
 
-    url_codice = next((a["browser_download_url"] for a in dati.get("assets", []) if a["name"] == NOME_ZIP_CODICE), None)
-    if not url_codice:
-        raise ErroreAggiornamento("L'ultima versione su GitHub non ha ancora il pacchetto del codice (forse è in preparazione).")
+    trovato = re.search(r"/releases/tag/([^/?#]+)$", indirizzo_finale)
+    if not trovato:  # senza versioni pubblicate GitHub rimanda all'elenco vuoto
+        raise ErroreAggiornamento("Nessuna versione pubblicata su GitHub.")
+    etichetta = urllib.parse.unquote(trovato.group(1))
+
+    note = ""
+    try:
+        with _apri(f"{base}/download/{etichetta}/{NOME_NOTA}", timeout) as risposta:
+            note = risposta.read().decode("utf-8", errors="replace").strip()
+    except (urllib.error.URLError, TimeoutError, OSError):
+        pass  # versioni pubblicate prima che esistesse la nota
     return {
-        "versione": dati["tag_name"].removeprefix("v"),
-        "note": (dati.get("body") or "").strip(),
-        "data": dati.get("published_at", ""),
-        "pagina": dati.get("html_url", ""),
-        "url_codice": url_codice,
+        "versione": etichetta.removeprefix("v"),
+        "note": note,
+        "pagina": f"{base}/tag/{etichetta}",
+        "url_codice": f"{base}/download/{etichetta}/{NOME_ZIP_CODICE}",
     }
 
 
@@ -113,6 +133,11 @@ def scarica(url: str, destinazione: Path) -> Path:
     try:
         with urllib.request.urlopen(richiesta, timeout=120) as risposta, open(destinazione, "wb") as uscita:
             shutil.copyfileobj(risposta, uscita)
+    except urllib.error.HTTPError as e:
+        destinazione.unlink(missing_ok=True)
+        if e.code == 404:
+            raise ErroreAggiornamento("Il pacchetto della nuova versione non è ancora pronto su GitHub: riprova tra qualche minuto.") from e
+        raise ErroreAggiornamento(f"Download non riuscito (errore {e.code}).") from e
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         destinazione.unlink(missing_ok=True)
         raise ErroreAggiornamento(f"Download non riuscito: {e}") from e

@@ -40,7 +40,9 @@ jobs:
       - name: Note della versione
         shell: pwsh
         run: |
-          $nota = git tag -l --format='%(contents)' "${{ github.ref_name }}"
+          $nota = (git tag -l --format='%(contents)' "${{ github.ref_name }}" | Out-String).Trim()
+          # La nota da sola, allegata come file: l'app la legge senza usare l'API di GitHub.
+          $nota | Out-File -Encoding utf8NoBOM nota.txt
           @"
           $nota
 
@@ -58,3 +60,4 @@ jobs:
           files: |
             dist/Generatore_caroselli_SEDS_UPO_windows.zip
             dist/Generatore_caroselli_SEDS_UPO_codice.zip
+            nota.txt

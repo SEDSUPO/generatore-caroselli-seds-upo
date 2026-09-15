@@ -240,7 +240,7 @@ def sposta_modello(tipo):
 # ---------------------------------------------------------------------------
 
 _cache_aggiornamento: dict = {}
-DURATA_CACHE_AGGIORNAMENTO = 10 * 60  # GitHub concede 60 richieste l'ora senza login
+DURATA_CACHE_AGGIORNAMENTO = 10 * 60  # non serve controllare più spesso
 
 
 @app.route("/impostazioni/aggiornamento/controlla")
