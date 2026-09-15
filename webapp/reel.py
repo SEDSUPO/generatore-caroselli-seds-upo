@@ -54,7 +54,10 @@ def elenca_reel() -> list[dict]:
     if not REEL_DIR.is_dir():
         return risultati
     for cartella in sorted(REEL_DIR.iterdir(), reverse=True):
-        reel = carica_reel(cartella.name) if (cartella / "dati.json").is_file() else None
+        try:
+            reel = carica_reel(cartella.name) if (cartella / "dati.json").is_file() else None
+        except ValueError:  # dati.json illeggibile: si salta invece di bloccare la home
+            continue
         if reel is None:
             continue
         secondi = stima_secondi(reel.testo_completo())

@@ -79,7 +79,10 @@ def elenca_caroselli() -> list[dict]:
     for cartella in sorted(NOTIZIE_DIR.iterdir(), reverse=True):
         if not (cartella / "dati.json").is_file():
             continue
-        carosello = _carica_carosello(cartella.name)
+        try:
+            carosello = _carica_carosello(cartella.name)
+        except ValueError:  # dati.json illeggibile: si salta invece di bloccare la home
+            continue
         if carosello is None:
             continue
         cartella_output = OUTPUT_NOTIZIE_DIR / carosello.nome_carosello

@@ -104,8 +104,11 @@ def crea_zip_portatile(file: list[str], versione: str, lavoro: Path, destinazion
     subprocess.run(
         [str(cartella_python / "python.exe"), "-c",
          "import webapp.app, faster_whisper, kokoro_onnx, ctranslate2, onnxruntime, imageio_ffmpeg, yt_dlp; print('ok')"],
-        cwd=app, check=True,
+        cwd=app, check=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
     )
+    # Le cache create dalla verifica (e da pip) non vanno nel pacchetto: si rigenerano da sole.
+    for cache in [p for p in app.rglob("__pycache__") if "python" not in p.relative_to(app).parts[:1]]:
+        shutil.rmtree(cache, ignore_errors=True)
 
     print("Comprimo il pacchetto...")
     if destinazione.exists():

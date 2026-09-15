@@ -444,7 +444,10 @@ def _elenca_caroselli() -> list[dict]:
         path_json = cartella / "slides.json"
         if not path_json.is_file():
             continue
-        carosello = CarosalloCompleto.model_validate_json(path_json.read_text(encoding="utf-8"))
+        try:
+            carosello = CarosalloCompleto.model_validate_json(path_json.read_text(encoding="utf-8"))
+        except ValueError:  # slides.json illeggibile: si salta invece di bloccare la home
+            continue
         cartella_input = INPUT_IMMAGINI_DIR / carosello.nome_carosello
         cartella_output = OUTPUT_DIR / carosello.nome_carosello
         immagini_presenti = sum(

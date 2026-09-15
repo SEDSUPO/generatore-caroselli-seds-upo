@@ -30,9 +30,11 @@ jobs:
           python-version: "3.14"
 
       - name: Crea i pacchetti
+        id: pacchetti
         shell: pwsh
         run: |
           $versione = "${{ github.ref_name }}".Substring(1)
+          "versione=$versione" >> $env:GITHUB_OUTPUT
           python strumenti/crea_pacchetti.py --versione $versione --uscita dist
 
       - name: Note della versione
@@ -51,7 +53,7 @@ jobs:
       - name: Pubblica la versione
         uses: softprops/action-gh-release@v2
         with:
-          name: Versione ${{ github.ref_name }}
+          name: Versione ${{ steps.pacchetti.outputs.versione }}
           body_path: note.md
           files: |
             dist/Generatore_caroselli_SEDS_UPO_windows.zip
