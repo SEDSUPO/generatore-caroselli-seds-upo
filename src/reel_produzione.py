@@ -43,6 +43,7 @@ class Blocco:
     inizio_video: float
     riempi_schermo: bool = False
     inquadratura_x: float = 0.5
+    senza_zoom: bool = False
 
 
 def cartella_reel(nome: str) -> Path:
@@ -213,7 +214,6 @@ def azzera_produzione_copione(reel: Reel) -> None:
         musica_url=vecchia.musica_url,
         musica_attribuzione=vecchia.musica_attribuzione,
         sottotitoli_attivi=vecchia.sottotitoli_attivi,
-        titolo_hook_attivo=vecchia.titolo_hook_attivo,
         titolo_copertina=vecchia.titolo_copertina,
         voce_motore=vecchia.voce_motore,
         voce_nome=vecchia.voce_nome,
@@ -246,6 +246,7 @@ def calcola_blocchi(reel: Reel, produzione: ProduzioneReel) -> list[Blocco]:
                     inizio_video=stato.inizio_video,
                     riempi_schermo=stato.riempi_schermo,
                     inquadratura_x=stato.inquadratura_x,
+                    senza_zoom=stato.senza_zoom,
                 )
             )
         tempo += durata

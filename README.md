@@ -244,8 +244,12 @@ spunta su quelli completi).
    sostituisce il visivo di quella parte. Con **"Continua il visivo della parte
    precedente"** più parti condividono lo stesso visivo senza tagli (es. un video
    che scorre sotto due scene). Per i video scegli con un cursore il **tratto** da
-   usare, lungo esattamente quanto la voce di quelle parti. Le immagini hanno sempre
-   uno **zoom lento e costante**. I visivi orizzontali di default restano interi, con
+   usare, lungo esattamente quanto la voce di quelle parti. Le immagini hanno uno
+   **zoom lento e costante**, disattivabile per scena con **"Senza zoom"**. La
+   **qualità** delle foto (alta/bassa, in base ai pixel) è indicata già nei risultati
+   di ricerca, nella libreria e sulla miniatura della parte. Ogni parte ha il cursore
+   **Posizione dei sottotitoli** (più in alto / più in basso) con anteprima sulla
+   miniatura. I visivi orizzontali di default restano interi, con
    ai lati una versione sfocata di sé stessi invece delle bande nere; con **"Riempi lo
    schermo"** vengono invece ingranditi a tutto schermo tagliando i lati, e il cursore
    **Inquadratura** sceglie quale porzione tenere (anteprima verticale dal vivo nella
@@ -258,9 +262,9 @@ spunta su quelli completi).
      dimensiona il font sull'altezza winAscent+winDescent, non sull'em). Una
      sfumatura scura sul terzo inferiore e in alto tiene leggibili testo e logo anche su
      riprese chiare;
-   - durante l'hook il testo appare come titolo grande;
+   - i sottotitoli sono uguali per tutte le parti, hook compreso;
    - logo in overlay e musica di sottofondo facoltativa, che si abbassa da sola
-     quando parli. La musica si cerca direttamente nell'app su **Openverse** (brani
+     quando parli (volume da 0 a 100%: il 30% è un sottofondo discreto, verso il 100% copre la voce). La musica si cerca direttamente nell'app su **Openverse** (brani
      Creative Commons, soprattutto da Jamendo, senza chiave), con il genere già
      suggerito da Gemini; si ascolta e si sceglie con un clic, e titolo, autore e
      licenza finiscono nei crediti. Di default si escludono le licenze ND, che

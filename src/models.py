@@ -314,6 +314,10 @@ class StatoSegmento(BaseModel):
     # contano solo sul primo segmento di un blocco.
     riempi_schermo: bool = False
     inquadratura_x: float = 0.5
+    senza_zoom: bool = False  # immagini: niente zoom lento (solo sul primo segmento di un blocco)
+    # Spostamento verticale dei sottotitoli di questo segmento, in pixel su 1920 di
+    # altezza (0 = posizione standard, negativo = più in alto).
+    posizione_sottotitoli: float = 0.0
     query_ricerca: str = ""
     parole: list[ParolaTrascritta] | None = None  # None = non ancora trascritto
     parole_take: str | None = None  # take a cui si riferisce la trascrizione
@@ -326,7 +330,7 @@ class ProduzioneReel(BaseModel):
     segmenti: dict[str, StatoSegmento] = Field(default_factory=dict)
     asset: list[Asset] = Field(default_factory=list)
     musica_file: str | None = None  # relativo a reel/<nome>/media/
-    musica_volume: float = 0.18
+    musica_volume: float = 0.02
     # Crediti del brano se scelto dall'archivio di musica libera (Openverse); vuoti se caricato.
     musica_titolo: str | None = None
     musica_autore: str | None = None
@@ -335,7 +339,6 @@ class ProduzioneReel(BaseModel):
     musica_attribuzione: str | None = None
     musica_query: str = ""
     sottotitoli_attivi: bool = True
-    titolo_hook_attivo: bool = True
     voce_motore: str = "kokoro"  # kokoro | gemini
     voce_nome: str = "if_sara"
     voce_velocita: float = 1.0

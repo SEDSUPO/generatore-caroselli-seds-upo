@@ -1,9 +1,8 @@
 """Sottotitoli del reel in formato ASS, bruciati nel video da ffmpeg (libass).
 
-- Durante l'hook: titolo grande nella parte alta (i primi secondi decidono se chi
-  guarda resta), invece dei sottotitoli normali che lo duplicherebbero.
-- Poi: sottotitoli a gruppi di poche parole, testo bianco senza contorno, con un
-  rettangolino rosso del brand dietro la parola pronunciata in quel momento.
+- Sottotitoli a gruppi di poche parole, uguali per tutte le scene (hook compreso):
+  testo bianco senza contorno, con un rettangolino rosso del brand dietro la parola
+  pronunciata in quel momento. Ogni scena può spostarli in alto o in basso.
 
 ASS non sa disegnare uno sfondo dietro una sola parola: il rettangolo è una forma
 vettoriale (\\p1) su un livello sotto il testo, posizionata calcolando dove cade
@@ -42,7 +41,7 @@ _PAUSA_MASSIMA_A_SCHERMO = 0.4  # dopo l'ultima parola di un gruppo, il testo re
 LARGHEZZA, ALTEZZA = 1080, 1920
 DIMENSIONE_SOTTOTITOLI = 92
 LINEA_BASE_SOTTOTITOLI = 1310  # in basso, ma sopra l'area coperta da nome utente e didascalia di Instagram
-DIMENSIONE_TITOLO = 98
+SPOSTAMENTO_MINIMO, SPOSTAMENTO_MASSIMO = -1250, 450  # limiti dello spostamento per scena (px su 1920)
 
 
 @dataclass(frozen=True)
@@ -84,6 +83,7 @@ class _ParolaTimeline:
     inizio: float
     fine: float
     fine_segmento: float
+    spostamento: int = 0  # px su 1920: posizione verticale dei sottotitoli di questa scena
 
 
 def _tempo_ass(secondi: float) -> str:
@@ -148,8 +148,6 @@ def genera_ass(reel: Reel, produzione: ProduzioneReel, destinazione: Path) -> No
         # data evento per evento con \pos, per allineare il rettangolo della parola.
         f"Style: Sub,{FAMIGLIA_FONT},{DIMENSIONE_SOTTOTITOLI},{_BIANCO},{_BIANCO},{_BIANCO},&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
         f"Style: Evidenza,{FAMIGLIA_FONT},{DIMENSIONE_SOTTOTITOLI},{_ROSSO},{_ROSSO},{_ROSSO},&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
-        # Titolo dell'hook: grande, nella parte alta, sotto l'intestazione dell'app.
-        f"Style: Titolo,{FAMIGLIA_FONT},{DIMENSIONE_TITOLO},{_BIANCO},{_BIANCO},{_BIANCO},&H00000000,0,0,0,0,100,100,0,0,1,0,0,8,90,90,330,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -165,13 +163,6 @@ def genera_ass(reel: Reel, produzione: ProduzioneReel, destinazione: Path) -> No
         inizio_segmento, fine_segmento = tempo, tempo + take.durata
         tempo = fine_segmento
 
-        if segmento.chiave == "hook" and produzione.titolo_hook_attivo:
-            testo = _pulisci(segmento.testo)
-            righe.append(
-                f"Dialogue: 1,{_tempo_ass(inizio_segmento)},{_tempo_ass(fine_segmento)},Titolo,,0,0,0,,{{\\fad(250,200)}}{testo}"
-            )
-            continue
-
         if not produzione.sottotitoli_attivi or not stato.parole:
             continue
         for parola in _unisci_apostrofi(stato.parole):
@@ -181,16 +172,12 @@ def genera_ass(reel: Reel, produzione: ProduzioneReel, destinazione: Path) -> No
                     inizio=inizio_segmento + parola.inizio,
                     fine=min(inizio_segmento + parola.fine, fine_segmento),
                     fine_segmento=fine_segmento,
+                    spostamento=round(stato.posizione_sottotitoli),
                 )
             )
 
     metriche = _metriche(DIMENSIONE_SOTTOTITOLI)
     spazio = metriche.font.getlength(" ")
-    alto_riga = LINEA_BASE_SOTTOTITOLI - metriche.ascesa
-    # Rettangolo: dalla cima delle maiuscole alla linea di base, con un po' di aria
-    # (stesse proporzioni del carosello scientifico).
-    alto_rettangolo = LINEA_BASE_SOTTOTITOLI - metriche.maiuscole - metriche.em * 0.2
-    basso_rettangolo = LINEA_BASE_SOTTOTITOLI + metriche.em * 0.24
     margine_rettangolo = metriche.em * 0.14
 
     gruppi = _raggruppa(parole_timeline)
@@ -199,6 +186,14 @@ def genera_ass(reel: Reel, produzione: ProduzioneReel, destinazione: Path) -> No
         fine_gruppo = min(gruppo[-1].fine + _PAUSA_MASSIMA_A_SCHERMO, gruppo[-1].fine_segmento)
         if successivo is not None:
             fine_gruppo = min(fine_gruppo, successivo)
+
+        # Linea di base di questo gruppo (le scene possono avere i sottotitoli più su o più giù).
+        linea_base = LINEA_BASE_SOTTOTITOLI + gruppo[0].spostamento
+        alto_riga = linea_base - metriche.ascesa
+        # Rettangolo: dalla cima delle maiuscole alla linea di base, con un po' di aria
+        # (stesse proporzioni del carosello scientifico).
+        alto_rettangolo = linea_base - metriche.maiuscole - metriche.em * 0.2
+        basso_rettangolo = linea_base + metriche.em * 0.24
 
         larghezze = [metriche.font.getlength(p.testo) for p in gruppo]
         x_riga = (LARGHEZZA - (sum(larghezze) + spazio * (len(gruppo) - 1))) / 2

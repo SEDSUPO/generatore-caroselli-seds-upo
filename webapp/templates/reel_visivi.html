@@ -2,6 +2,8 @@
 {% block titolo %}Visivi — {{ reel.nome_reel }}{% endblock %}
 
 {% macro url_media(file) %}{{ url_for('reel_prod.file_reel', nome=reel.nome_reel, tipo='media', file=file) }}{% endmacro %}
+{# Qualità di un'immagine della libreria: lato maggiore sotto la soglia = bassa. #}
+{% macro badge_qualita(a) %}{% if a.tipo == 'immagine' %}{% if ([a.larghezza, a.altezza] | max) < lato_minimo %}<span class="badge-miniatura badge-bassa">Bassa qualità</span>{% else %}<span class="badge-miniatura badge-alta">Alta qualità</span>{% endif %}{% endif %}{% endmacro %}
 
 {% block contenuto %}
 <h1>{{ reel.nome_reel }}</h1>
@@ -15,7 +17,8 @@
   </div>
   <p class="sottotitolo" style="margin:10px 0 18px">
     Seleziona una parte, poi clicca un elemento della libreria per assegnarlo. Con "continua" la parte
-    prosegue lo stesso visivo della precedente, senza tagli. Le immagini hanno sempre uno zoom lento.
+    prosegue lo stesso visivo della precedente, senza tagli. Le immagini hanno uno zoom lento, che si
+    toglie con "Senza zoom". Ogni parte può avere i sottotitoli più in alto o più in basso.
   </p>
 
   {% for view in segmenti_view %}
@@ -33,8 +36,12 @@
         {% elif asset %}
           <img src="{{ url_media(asset.anteprima) }}" alt="" data-miniatura style="{{ stile_inquadratura }}">
           {% if asset.tipo == 'video' %}<span class="badge-miniatura">VIDEO</span>{% endif %}
+          {{ badge_qualita(asset) }}
         {% else %}
           <span class="placeholder">Nessun visivo</span>
+        {% endif %}
+        {% if produzione.sottotitoli_attivi %}
+          <div class="anteprima-sottotitoli" data-anteprima-sottotitoli aria-hidden="true"><span>sotto</span> <span class="evidenza">titoli</span></div>
         {% endif %}
       </div>
 
@@ -88,6 +95,7 @@
                       <span class="card-media-img">
                         <img src="{{ url_media(a.anteprima) }}" alt="" loading="lazy">
                         {% if a.tipo == 'video' %}<span class="badge-miniatura">VIDEO</span>{% endif %}
+                        {{ badge_qualita(a) }}
                       </span>
                     </button>
                   {% endfor %}
@@ -114,6 +122,24 @@
                 <span class="nota">destra</span>
               </div>
               <p class="nota" data-avviso-sgranato hidden style="color:#ff8b83"></p>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if not continua and asset and asset.tipo == 'immagine' %}
+          <label class="spunta">
+            <input type="checkbox" data-senza-zoom {{ 'checked' if view.stato.senza_zoom }}>
+            Senza zoom (l'immagine resta ferma)
+          </label>
+        {% endif %}
+
+        {% if produzione.sottotitoli_attivi %}
+          <div class="posizione-sottotitoli">
+            <label>Posizione dei sottotitoli di questa parte</label>
+            <div class="riga-inquadratura">
+              <span class="nota">più in alto</span>
+              <input type="range" min="{{ spostamento_minimo }}" max="{{ spostamento_massimo }}" step="10" value="{{ view.stato.posizione_sottotitoli | round | int }}" data-posizione-sottotitoli>
+              <span class="nota">più in basso</span>
             </div>
           </div>
         {% endif %}
@@ -156,7 +182,7 @@
           <div class="card-media-img">
             <img src="{{ url_media(a.anteprima) }}" alt="" loading="lazy">
             {% if a.tipo == 'video' %}<span class="badge-miniatura">VIDEO {{ '%d:%02d' % (a.durata // 60, a.durata % 60) }}</span>{% endif %}
-            {% if a.tipo == 'immagine' and lato < lato_minimo %}<span class="badge-miniatura badge-bassa">Bassa risoluzione</span>{% endif %}
+            {{ badge_qualita(a) }}
             <button class="card-media-elimina" type="button" data-btn-elimina-asset title="Elimina dalla libreria">✕</button>
           </div>
           <div class="card-media-testo">
@@ -332,7 +358,7 @@
         el.type = "button";
         el.className = "card-media";
         el.title = [r.titolo, r.autore, r.licenza].filter(Boolean).join(" · ");
-        el.innerHTML = `<span class="card-media-img"><img src="${escapeHtml(r.anteprima_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">${r.tipo === "video" ? '<span class="badge-miniatura">VIDEO</span>' : ""}</span>`;
+        el.innerHTML = `<span class="card-media-img"><img src="${escapeHtml(r.anteprima_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">${r.tipo === "video" ? '<span class="badge-miniatura">VIDEO</span>' : badgeQualita(r)}</span>`;
         el.addEventListener("click", async () => {
           esito.textContent = r.tipo === "video" ? "Download del video (può richiedere un po')..." : "Download dell'immagine...";
           esito.style.color = "var(--muted)";
@@ -426,6 +452,25 @@
     if (query) {
       query.addEventListener("change", () => impostaVisivo(chiave, { query_ricerca: query.value }));
       collegaSceltaVisivo(c, chiave, query);
+    }
+
+    const senzaZoom = c.querySelector("[data-senza-zoom]");
+    if (senzaZoom) {
+      senzaZoom.addEventListener("change", () => impostaVisivo(chiave, { senza_zoom: senzaZoom.checked ? "1" : "0" }));
+    }
+
+    // Anteprima dei sottotitoli sulla miniatura: stessa posizione verticale del montaggio
+    // (linea di base 1310 su 1920 più lo spostamento scelto).
+    const posSottotitoli = c.querySelector("[data-posizione-sottotitoli]");
+    const anteprimaSottotitoli = c.querySelector("[data-anteprima-sottotitoli]");
+    if (posSottotitoli && anteprimaSottotitoli) {
+      const mostra = () => {
+        const linea = {{ linea_base_sottotitoli }} + Number(posSottotitoli.value) - 46; // 46 = metà altezza del testo
+        anteprimaSottotitoli.style.top = `${(linea / 1920) * 100}%`;
+      };
+      mostra();
+      posSottotitoli.addEventListener("input", mostra);
+      posSottotitoli.addEventListener("change", () => impostaVisivo(chiave, { posizione_sottotitoli: posSottotitoli.value }));
     }
 
     const inquadratura = c.querySelector("[data-inquadratura]");
@@ -630,6 +675,13 @@
   const risultatiEl = document.getElementById("risultati-ricerca");
   const esitoRicerca = document.getElementById("esito-ricerca");
 
+  // Qualità dichiarata già nei risultati: "alta" / "bassa" / "n.d." (dimensioni non note).
+  function badgeQualita(r) {
+    const nomi = { alta: ["badge-alta", "Alta qualità"], bassa: ["badge-bassa", "Bassa qualità"], "n.d.": ["badge-nd", "Qualità n.d."] };
+    const voce = nomi[r.qualita];
+    return voce ? `<span class="badge-miniatura ${voce[0]}">${voce[1]}</span>` : "";
+  }
+
   function escapeHtml(testo) {
     const div = document.createElement("div");
     div.textContent = testo || "";
@@ -661,12 +713,10 @@
       const el = document.createElement("div");
       el.className = "card-media";
       const dimensioni = r.larghezza ? `${r.larghezza}×${r.altezza}` : "";
-      const bassa = r.tipo === "immagine" && r.larghezza && Math.max(r.larghezza, r.altezza) < {{ lato_minimo }};
       el.innerHTML = `
         <div class="card-media-img">
           <img src="${escapeHtml(r.anteprima_url)}" alt="" loading="lazy" referrerpolicy="no-referrer">
-          ${r.tipo === "video" ? '<span class="badge-miniatura">VIDEO</span>' : ""}
-          ${bassa ? '<span class="badge-miniatura badge-bassa">Bassa risoluzione</span>' : ""}
+          ${r.tipo === "video" ? '<span class="badge-miniatura">VIDEO</span>' : badgeQualita(r)}
         </div>
         <div class="card-media-testo">
           <span class="card-media-titolo">${escapeHtml(r.titolo)}</span>

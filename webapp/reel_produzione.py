@@ -23,7 +23,7 @@ from src import lavori, reel_voce
 from src.config import carica_config_opzionale
 from src.durata_parlato import formatta_durata, stima_secondi
 from src.ffmpeg_utils import durata_media, estrai_fotogramma
-from src.models import Reel
+from src.models import ParolaTrascritta, Reel
 from src.musica_libera import ErroreMusica, cerca_musica, scarica_brano
 from src.reel_copertina import componi_copertina
 from src.reel_media import (
@@ -36,6 +36,7 @@ from src.reel_media import (
     importa_risultato,
     importa_video,
     importa_youtube,
+    qualita_immagine,
     rimuovi_asset,
 )
 from src.reel_montaggio import QUALITA_ANTEPRIMA, QUALITA_FINALE, RAPPORTO_OLTRE_CUI_SFONDO_SFOCATO, monta
@@ -56,6 +57,7 @@ from src.reel_produzione import (
     segmenti_parlati,
     voci_ai_usate,
 )
+from src.reel_sottotitoli import LINEA_BASE_SOTTOTITOLI, SPOSTAMENTO_MASSIMO, SPOSTAMENTO_MINIMO
 from src.reel_visivi_ai import analizza_visivi, prompt_copertina
 from webapp.reel_comune import stato_passi
 from webapp.utils import NOME_PATTERN
@@ -395,6 +397,9 @@ def visivi(nome):
         produzione=produzione,
         uso_asset=uso_asset,
         lato_minimo=LATO_MINIMO_CONSIGLIATO,
+        linea_base_sottotitoli=LINEA_BASE_SOTTOTITOLI,
+        spostamento_minimo=SPOSTAMENTO_MINIMO,
+        spostamento_massimo=SPOSTAMENTO_MASSIMO,
         rapporto_orizzontale=RAPPORTO_OLTRE_CUI_SFONDO_SFOCATO,
         **_contesto_comune(reel, "visivi"),
     )
@@ -444,7 +449,13 @@ def cerca_media():
             return _errore("Fonte non valida.")
     except Exception as e:  # noqa: BLE001 - archivio irraggiungibile o risposta inattesa
         return _errore(f"Ricerca non riuscita: {e}", 502)
-    return jsonify(ok=True, risultati=[r.__dict__ for r in risultati])
+    return jsonify(
+        ok=True,
+        risultati=[
+            {**r.__dict__, "qualita": qualita_immagine(r.larghezza, r.altezza) if r.tipo == "immagine" else None}
+            for r in risultati
+        ],
+    )
 
 
 def _aggiungi_asset(reel: Reel, asset, assegna_a: str | None) -> None:
@@ -581,6 +592,14 @@ def imposta_visivo(nome, chiave):
                 stato.inquadratura_x = round(min(max(float(request.form["inquadratura_x"]), 0.0), 1.0), 3)
             except ValueError:
                 return _errore("Inquadratura non valida.")
+        if "senza_zoom" in request.form:
+            stato.senza_zoom = request.form["senza_zoom"] == "1"
+        if "posizione_sottotitoli" in request.form:
+            try:
+                valore = float(request.form["posizione_sottotitoli"])
+            except ValueError:
+                return _errore("Posizione dei sottotitoli non valida.")
+            stato.posizione_sottotitoli = round(min(max(valore, SPOSTAMENTO_MINIMO), SPOSTAMENTO_MASSIMO))
         if "continua_precedente" in request.form:
             stato.continua_precedente = request.form["continua_precedente"] == "1" and chiave != primo
         if "inizio_video" in request.form:
@@ -630,8 +649,14 @@ def montaggio(nome):
     if produzione.musica_file:
         musica_url = url_for("reel_prod.file_reel", nome=nome, tipo="media", file=produzione.musica_file)
 
+    sottotitoli_view = [
+        {"chiave": s.chiave, "etichetta": s.etichetta, "testo": " ".join(p.testo for p in stato.parole)}
+        for s in segmenti_parlati(reel)
+        if (stato := produzione.segmenti.get(s.chiave)) and stato.parole
+    ]
     return render_template(
         "reel_montaggio.html",
+        sottotitoli_view=sottotitoli_view,
         produzione=produzione,
         mancanze=mancanze(reel, produzione),
         blocchi_view=blocchi_view,
@@ -643,14 +668,41 @@ def montaggio(nome):
     )
 
 
+@bp.route("/api/reel/<nome>/segmento/<chiave>/sottotitoli", methods=["POST"])
+def modifica_sottotitoli(nome, chiave):
+    """Corregge il testo dei sottotitoli di una scena. Con lo stesso numero di parole i
+    tempi restano quelli riconosciuti; altrimenti si ridistribuiscono sulla durata
+    del parlato in proporzione alla lunghezza delle parole."""
+    reel = _reel_o_404(nome)
+    if not _chiave_valida(reel, chiave):
+        return _errore("Segmento non trovato.", 404)
+    nuove = request.form.get("testo", "").split()
+    if not nuove:
+        return _errore("Scrivi almeno una parola.")
+    with modifica_produzione(reel) as produzione:
+        stato = produzione.segmenti[chiave]
+        if not stato.parole:
+            return _errore("Questa scena non è ancora stata trascritta: crea prima un video.")
+        vecchie = stato.parole
+        if len(nuove) == len(vecchie):
+            stato.parole = [ParolaTrascritta(testo=t, inizio=v.inizio, fine=v.fine) for t, v in zip(nuove, vecchie)]
+        else:
+            inizio, fine = vecchie[0].inizio, vecchie[-1].fine
+            pesi = [len(t) + 1 for t in nuove]
+            passo, cursore, risultato = (fine - inizio) / sum(pesi), inizio, []
+            for testo, peso in zip(nuove, pesi):
+                risultato.append(ParolaTrascritta(testo=testo, inizio=round(cursore, 2), fine=round(cursore + peso * passo, 2)))
+                cursore += peso * passo
+            stato.parole = risultato
+    return jsonify(ok=True, testo=" ".join(nuove))
+
+
 @bp.route("/api/reel/<nome>/opzioni", methods=["POST"])
 def imposta_opzioni(nome):
     reel = _reel_o_404(nome)
     with modifica_produzione(reel) as produzione:
         if "sottotitoli_attivi" in request.form:
             produzione.sottotitoli_attivi = request.form["sottotitoli_attivi"] == "1"
-        if "titolo_hook_attivo" in request.form:
-            produzione.titolo_hook_attivo = request.form["titolo_hook_attivo"] == "1"
         if "musica_volume" in request.form:
             try:
                 produzione.musica_volume = min(max(float(request.form["musica_volume"]), 0.0), 1.0)

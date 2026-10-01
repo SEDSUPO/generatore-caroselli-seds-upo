@@ -50,10 +50,7 @@
     <input type="checkbox" data-opzione="sottotitoli_attivi" {{ 'checked' if produzione.sottotitoli_attivi }}>
     Sottotitoli animati (parola per parola, trascritti dalla tua voce)
   </label>
-  <label class="spunta">
-    <input type="checkbox" data-opzione="titolo_hook_attivo" {{ 'checked' if produzione.titolo_hook_attivo }}>
-    Durante l'hook mostra il testo come titolo grande in alto
-  </label>
+  <p class="nota">La posizione dei sottotitoli si regola scena per scena nella pagina Visivi.</p>
 
   <h3 style="margin:22px 0 8px">Musica di sottofondo</h3>
   <p class="nota" style="margin-bottom:10px">
@@ -71,8 +68,9 @@
       <button class="btn btn-secondario btn-piccolo" type="button" id="btn-cambia-musica">Cambia brano</button>
       <button class="btn btn-secondario btn-piccolo btn-pericolo" type="button" id="btn-togli-musica">Togli musica</button>
     </div>
-    <label for="volume-musica" style="margin-top:14px">Volume della musica: <span id="valore-volume">{{ (produzione.musica_volume * 100) | round | int }}%</span></label>
-    <input type="range" id="volume-musica" min="0" max="0.5" step="0.01" value="{{ produzione.musica_volume }}">
+    <label for="volume-musica" style="margin-top:14px">Volume della musica: <span id="valore-volume"></span></label>
+    <input type="range" id="volume-musica" min="0" max="100" step="1" data-guadagno="{{ produzione.musica_volume }}">
+    <p class="nota">Da 0 a 100%: il 30% è un sottofondo discreto, verso il 100% la musica è fortissima e copre la voce.</p>
   {% endif %}
   <div id="blocco-cerca-musica" {{ 'hidden' if musica_url }} style="margin-top:12px">
     <div class="riga-query">
@@ -121,6 +119,26 @@
   </div>
 </div>
 
+{% if sottotitoli_view %}
+<div class="pannello">
+  <h2>Modifica i sottotitoli</h2>
+  <p class="nota" style="margin-bottom:14px">
+    Correggi le parole riconosciute dal parlato. Con lo stesso numero di parole i tempi restano identici; se ne aggiungi
+    o ne togli, i tempi si ridistribuiscono sulla scena. Poi rifai l'anteprima o il video finale.
+  </p>
+  {% for s in sottotitoli_view %}
+    <div style="margin-bottom:12px" data-sottotitoli="{{ s.chiave }}">
+      <label>{{ s.etichetta }}</label>
+      <textarea rows="2" data-testo-sottotitoli>{{ s.testo }}</textarea>
+      <div class="riga-bottoni" style="margin-top:6px">
+        <button class="btn btn-secondario btn-piccolo" type="button" data-salva-sottotitoli>Salva</button>
+        <span class="esito-verifica" data-esito-sottotitoli></span>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="barra-azioni">
   <a class="btn btn-secondario" href="{{ url_for('reel_prod.visivi', nome=reel.nome_reel) }}">← Visivi</a>
   {% if video.finale %}
@@ -148,16 +166,32 @@
     });
   });
 
+  // Scala del cursore: 30% = guadagno 0.02 (sottofondo discreto), 100% = guadagno 1.0.
+  const PUNTO_BASE = 30, GUADAGNO_BASE = 0.02, GUADAGNO_MASSIMO = 1.0;
+  const ESPONENTE = Math.log(GUADAGNO_MASSIMO / GUADAGNO_BASE) / Math.log(100 / PUNTO_BASE);
+  const daPercentuale = (p) => GUADAGNO_BASE * Math.pow(p / PUNTO_BASE, ESPONENTE);
+  const aPercentuale = (g) => PUNTO_BASE * Math.pow(g / GUADAGNO_BASE, 1 / ESPONENTE);
   const volume = document.getElementById("volume-musica");
   if (volume) {
-    volume.addEventListener("input", () => {
-      document.getElementById("valore-volume").textContent = `${Math.round(volume.value * 100)}%`;
-    });
+    const mostraVolume = () => { document.getElementById("valore-volume").textContent = `${volume.value}%`; };
+    volume.value = Math.min(100, Math.round(aPercentuale(parseFloat(volume.dataset.guadagno) || 0)));
+    mostraVolume();
+    volume.addEventListener("input", mostraVolume);
     volume.addEventListener("change", async () => {
-      const risposta = await chiamaApi(`/api/reel/${nomeReel}/opzioni`, { dati: { musica_volume: volume.value } });
+      const guadagno = daPercentuale(parseFloat(volume.value)).toFixed(4);
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/opzioni`, { dati: { musica_volume: guadagno } });
       mostraEsito(esitoOpzioni, risposta.ok ? "Salvato." : risposta.messaggio, risposta.ok);
     });
   }
+
+  document.querySelectorAll("[data-sottotitoli]").forEach((riquadro) => {
+    const esito = riquadro.querySelector("[data-esito-sottotitoli]");
+    riquadro.querySelector("[data-salva-sottotitoli]").addEventListener("click", async () => {
+      const testo = riquadro.querySelector("[data-testo-sottotitoli]").value;
+      const risposta = await chiamaApi(`/api/reel/${nomeReel}/segmento/${riquadro.dataset.sottotitoli}/sottotitoli`, { dati: { testo } });
+      mostraEsito(esito, risposta.ok ? "Salvato: rifai il video per vederlo." : risposta.messaggio, risposta.ok);
+    });
+  });
 
   const inputMusica = document.getElementById("input-musica");
   if (inputMusica) {

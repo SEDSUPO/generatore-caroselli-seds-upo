@@ -11,6 +11,7 @@ import io
 import re
 import shutil
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -184,10 +185,48 @@ def cerca_nasa(query: str, tipo: str, limite: int = 18) -> list[RisultatoRicerca
                 autore=f"NASA/{crediti}" if crediti and "nasa" not in crediti.lower() else (crediti or "NASA"),
                 licenza="NASA Media Usage Guidelines",
                 url_origine=f"https://images.nasa.gov/details/{dati['nasa_id']}",
-                larghezza=None, altezza=None,  # la ricerca NASA non restituisce le dimensioni
+                larghezza=None, altezza=None,  # la ricerca NASA non le restituisce: vedi _completa_dimensioni_nasa
             )
         )
+    if media_type == "image":
+        _completa_dimensioni_nasa(risultati)
     return risultati
+
+
+def _dimensioni_nasa(nasa_id: str) -> tuple[int, int] | None:
+    """Dimensioni dell'originale dal file metadata.json dell'elemento; None se non indicate."""
+    try:
+        risposta = httpx.get(f"https://images-api.nasa.gov/asset/{nasa_id}", headers=_HEADERS, timeout=20)
+        risposta.raise_for_status()
+        href = next((e["href"] for e in risposta.json()["collection"]["items"] if e["href"].endswith("metadata.json")), None)
+        if not href:
+            return None
+        meta = httpx.get(href.replace("http://", "https://"), headers=_HEADERS, timeout=20, follow_redirects=True).json()
+    except (httpx.HTTPError, ValueError, KeyError):
+        return None
+    for chiave_l, chiave_a in (("File:ImageWidth", "File:ImageHeight"), ("EXIF:ExifImageWidth", "EXIF:ExifImageHeight"),
+                               ("EXIF:ImageWidth", "EXIF:ImageHeight")):
+        l, a = meta.get(chiave_l), meta.get(chiave_a)
+        if isinstance(l, int) and isinstance(a, int) and l > 0 and a > 0:
+            return l, a
+    return None
+
+
+def _completa_dimensioni_nasa(risultati: list[RisultatoRicerca]) -> None:
+    """La ricerca NASA non dà le dimensioni: si leggono in parallelo, così la qualità
+    è già visibile nei risultati e non solo dopo aver scelto l'immagine."""
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for risultato, dimensioni in zip(risultati, pool.map(lambda r: _dimensioni_nasa(r.riferimento), risultati)):
+            if dimensioni:
+                risultato.larghezza, risultato.altezza = dimensioni
+
+
+def qualita_immagine(larghezza: int | None, altezza: int | None) -> str:
+    """"alta" | "bassa" | "n.d." (dimensioni sconosciute). Soglia: lato maggiore
+    sotto LATO_MINIMO_CONSIGLIATO = sgranato con lo zoom/riempimento schermo."""
+    if not larghezza or not altezza:
+        return "n.d."
+    return "alta" if max(larghezza, altezza) >= LATO_MINIMO_CONSIGLIATO else "bassa"
 
 
 def _scegli_file_nasa(nasa_id: str, preferenze: list[str]) -> str:

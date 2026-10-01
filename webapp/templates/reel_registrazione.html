@@ -496,7 +496,7 @@
       tp.audio.src = nuova.url;
       impostaFase("fatto", `Ripresa salvata: ${nuova.durata.toFixed(1)} s. Riascoltala, Spazio per rifare, → per andare avanti.`);
     };
-    registratore.start();
+    registratore.start(250); // a pezzi da 250 ms: niente audio trattenuto in un unico buffer
     inizioRegistrazione = performance.now();
     impostaFase("registra");
     const aggiornaTimer = () => {
@@ -512,7 +512,21 @@
     else if (fase === "conto") {
       clearInterval(timerConto);
       mostraSegmento(indice);
-    } else if (fase === "registra") registratore.stop();
+    } else if (fase === "registra") fermaRegistrazione();
+  }
+
+  // Il MediaRecorder consegna l'audio con un po' di ritardo: fermandolo al clic si
+  // perdevano le ultime parole. Si lascia girare ancora un attimo ("coda") e si
+  // svuota il buffer prima di chiudere; non c'è nessun limite di durata.
+  const CODA_REGISTRAZIONE_MS = 700;
+  function fermaRegistrazione() {
+    if (fase !== "registra") return;
+    impostaFase("invio", "Chiudo la ripresa...");
+    setTimeout(() => {
+      if (registratore.state === "inactive") return;
+      registratore.requestData();
+      registratore.stop();
+    }, CODA_REGISTRAZIONE_MS);
   }
 
   function spostati(delta) {

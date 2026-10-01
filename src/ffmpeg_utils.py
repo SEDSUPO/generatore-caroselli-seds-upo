@@ -102,11 +102,17 @@ def durata_wav(percorso: Path) -> float:
 # Taglio dei silenzi a inizio e fine: silenceremove agisce solo sull'inizio, quindi
 # si applica, si rovescia l'audio, si riapplica e si rovescia di nuovo.
 _TAGLIO_SILENZI = (
-    "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-45dB,"
+    # start_silence lascia 0,1 s di margine: silenceremove "consuma" start_duration di
+    # audio al confine, e senza margine mangiava l'ultima sillaba (o la prima).
+    "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-45dB:start_silence=0.1,"
     "areverse,"
-    "silenceremove=start_periods=1:start_duration=0.05:start_threshold=-45dB,"
+    # In coda la soglia è più bassa: le ultime sillabe sono spesso le più deboli e non vanno mangiate.
+    "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-58dB:start_silence=0.1,"
     "areverse"
 )
+# Dissolvenze brevi sul parlato appena tagliato: senza, il taglio brusco a metà
+# rumore di fondo si sente come un "click" tra una scena e l'altra.
+_DISSOLVENZE = "afade=t=in:d=0.02,areverse,afade=t=in:d=0.04,areverse"
 
 
 def pulisci_voce(sorgente: Path, destinazione: Path, riduci_rumore: bool = True) -> float:
@@ -120,8 +126,8 @@ def pulisci_voce(sorgente: Path, destinazione: Path, riduci_rumore: bool = True)
         (["highpass=f=80", "afftdn=nf=-25"] if riduci_rumore else [])
         + [
             _TAGLIO_SILENZI,
-            "adelay=80:all=1",
-            "apad=pad_dur=0.25",
+            _DISSOLVENZE,
+            "apad=pad_dur=0.15",
         ]
     )
     destinazione.parent.mkdir(parents=True, exist_ok=True)

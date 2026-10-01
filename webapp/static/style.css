@@ -997,6 +997,49 @@ audio {
   background: rgba(170, 41, 34, 0.9);
 }
 
+.badge-alta {
+  left: 4px;
+  top: 4px;
+  bottom: auto;
+  background: rgba(34, 122, 70, 0.92);
+}
+
+.badge-nd {
+  left: 4px;
+  top: 4px;
+  bottom: auto;
+  background: rgba(90, 96, 120, 0.92);
+}
+
+/* Anteprima dei sottotitoli sulla miniatura della scena: la posizione (top) la
+   imposta lo script in base allo spostamento scelto. */
+.anteprima-sottotitoli {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 0.5rem;
+  font-weight: 800;
+  line-height: 1.5;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.anteprima-sottotitoli span {
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.anteprima-sottotitoli .evidenza {
+  background: #aa2922;
+}
+
+.posizione-sottotitoli {
+  margin-top: 10px;
+}
+
 .corpo-segmento {
   min-width: 0;
 }

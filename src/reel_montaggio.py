@@ -6,7 +6,7 @@ Fasi:
 3. un clip per ogni blocco visivo, lungo esattamente quanto il parlato che copre:
    immagini con zoom lento costante, video tagliati sullo spezzone scelto
 4. unione dei clip
-5. passaggio finale: sottotitoli e titolo dell'hook (ASS), logo, audio (voce +
+5. passaggio finale: sottotitoli (ASS), logo, audio (voce +
    eventuale musica che si abbassa da sola quando si parla, volume a -14 LUFS)
 
 Durate calcolate a fotogrammi interi e cumulate: così la somma dei clip coincide
@@ -80,8 +80,6 @@ def _segmenti_da_trascrivere(reel: Reel, produzione: ProduzioneReel) -> list[str
         return []
     chiavi = []
     for segmento in segmenti_parlati(reel):
-        if segmento.chiave == "hook" and produzione.titolo_hook_attivo:
-            continue  # durante l'hook si mostra il titolo, non i sottotitoli
         stato = produzione.segmenti[segmento.chiave]
         if stato.take_scelto and (stato.parole is None or stato.parole_take != stato.take_scelto):
             chiavi.append(segmento.chiave)
@@ -105,6 +103,26 @@ def trascrivi_mancanti(config: Config, reel: Reel, su_avanzamento: SuAvanzamento
             if stato and stato.take_scelto == take.id:
                 stato.parole = parole
                 stato.parole_take = take.id
+
+
+def _unisci_voce(reel: Reel, produzione: ProduzioneReel, destinazione: Path) -> None:
+    """Traccia voce: i take scelti uno dopo l'altro, con una dissolvenza minima su
+    parlato (dopo il respiro iniziale) e coda di ogni take. Serve anche per i take
+    registrati in passato: il taglio brusco al giunto tra due scene si sentiva come
+    un click. Le durate non cambiano, quindi il video resta sincrono."""
+    ingressi: list[str] = []
+    rami: list[str] = []
+    for indice, segmento in enumerate(segmenti_parlati(reel)):
+        take = produzione.segmenti[segmento.chiave].take_attivo()
+        ingressi += ["-i", str(cartella_audio(reel.nome_reel) / take.file)]
+        coda = max(take.durata - 0.29, 0.0)
+        rami.append(
+            f"[{indice}:a]aresample=48000,aformat=channel_layouts=mono,"
+            f"afade=t=in:st=0.075:d=0.02,afade=t=out:st={coda:.3f}:d=0.04[t{indice}]"
+        )
+    uniti = "".join(f"[t{i}]" for i in range(len(rami)))
+    grafo = ";".join(rami) + f";{uniti}concat=n={len(rami)}:v=0:a=1[voce]"
+    esegui([*ingressi, "-filter_complex", grafo, "-map", "[voce]", "-c:a", "pcm_s16le", str(destinazione)])
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +164,7 @@ def _clip_immagine(blocco: Blocco, sorgente: Path, fotogrammi: int, q: Qualita, 
     _base_immagine(sorgente, q.larghezza * 2, q.altezza * 2, blocco.riempi_schermo, blocco.inquadratura_x).save(base, quality=95)
 
     durata = fotogrammi / FPS
-    zoom_totale = min(ZOOM_AL_SECONDO * durata, ZOOM_TOTALE_MASSIMO)
+    zoom_totale = 0.0 if blocco.senza_zoom else min(ZOOM_AL_SECONDO * durata, ZOOM_TOTALE_MASSIMO)
     passo = zoom_totale / max(fotogrammi, 1)
     uscita = lavoro / f"blocco_{indice:02d}.mp4"
     esegui([
@@ -223,16 +241,8 @@ def monta(config: Config, reel: Reel, anteprima: bool, su_avanzamento: SuAvanzam
     try:
         # 2. Voce
         su_avanzamento("Preparazione traccia voce", peso_trascrizione)
-        lista_audio = lavoro / "voce.txt"
-        lista_audio.write_text(
-            "".join(
-                f"file '{_percorso_ffmpeg(cartella_audio(nome) / produzione.segmenti[s.chiave].take_attivo().file)}'\n"
-                for s in segmenti_parlati(reel)
-            ),
-            encoding="utf-8",
-        )
         voce = lavoro / "voce.wav"
-        esegui(["-f", "concat", "-safe", "0", "-i", str(lista_audio), "-c", "copy", str(voce)])
+        _unisci_voce(reel, produzione, voce)
 
         # 3. Clip dei blocchi
         blocchi = calcola_blocchi(reel, produzione)
@@ -273,27 +283,36 @@ def monta(config: Config, reel: Reel, anteprima: bool, su_avanzamento: SuAvanzam
     return uscita_finale
 
 
-def _crea_velo_testo(q: Qualita, produzione: ProduzioneReel, destinazione: Path) -> None:
-    """PNG trasparente con due sfumature scure morbide: in alto (titolo dell'hook e
-    logo) e in basso attorno ai sottotitoli. Nessun bordo netto: si scurisce solo
-    quanto basta perché il bianco non si perda su un cielo o una parete chiara."""
+def _crea_velo_testo(q: Qualita, spostamento: float | None, destinazione: Path) -> None:
+    """PNG trasparente con una sfumatura scura morbida. `spostamento` None: il velo
+    leggero in alto per il logo; un numero: la sfumatura attorno ai sottotitoli con
+    quello spostamento verticale (px su 1920, 0 = posizione standard). Nessun bordo
+    netto: si scurisce solo quanto basta perché il bianco non si perda su un cielo o
+    una parete chiara."""
     scala = q.altezza / ALTEZZA_RIFERIMENTO
     colonna = Image.new("L", (1, q.altezza), 0)
     valori = [0.0] * q.altezza
 
-    # In alto: sempre un velo leggero per il logo, più deciso se c'è il titolo dell'hook.
-    intensita_alto, fine_alto = (0.65, round(760 * scala)) if produzione.titolo_hook_attivo else (0.4, round(420 * scala))
-    for y in range(fine_alto):
-        valori[y] = intensita_alto * (1 - y / fine_alto) ** 1.3
-
-    # In basso: sfumatura progressiva su tutto il terzo inferiore (non una fascia, che su
-    # uno sfondo uniforme si vedrebbe come una striscia): piena dalla riga dei sottotitoli in giù.
-    if produzione.sottotitoli_attivi:
-        inizio = round(900 * scala)
-        pieno = round((LINEA_BASE_SOTTOTITOLI - 40) * scala)
-        for y in range(inizio, q.altezza):
-            t = min((y - inizio) / (pieno - inizio), 1.0)
-            valori[y] = max(valori[y], 0.5 * t * t * (3 - 2 * t))
+    if spostamento is None:
+        fine_alto = round(420 * scala)
+        for y in range(fine_alto):
+            valori[y] = 0.4 * (1 - y / fine_alto) ** 1.3
+    else:
+        # Sfumatura progressiva (non una fascia, che su uno sfondo uniforme si vedrebbe
+        # come una striscia), piena dalla riga dei sottotitoli. In posizione standard
+        # prosegue fino in fondo; se i sottotitoli sono stati alzati svanisce sotto di essi.
+        linea = (LINEA_BASE_SOTTOTITOLI + spostamento) * scala
+        inizio = round(linea - 410 * scala)
+        pieno = round(linea - 40 * scala)
+        sotto = round(linea + 60 * scala)
+        fine = round(linea + 310 * scala)
+        for y in range(max(inizio, 0), q.altezza):
+            t = min((y - inizio) / max(pieno - inizio, 1), 1.0)
+            valore = 0.5 * t * t * (3 - 2 * t)
+            if spostamento < 0 and y > sotto:
+                u = min((y - sotto) / max(fine - sotto, 1), 1.0)
+                valore *= 1 - u * u * (3 - 2 * u)
+            valori[y] = valore
     for y, valore in enumerate(valori):
         colonna.putpixel((0, y), round(255 * valore))
     velo = Image.new("RGBA", (q.larghezza, q.altezza), (8, 10, 20, 0))
@@ -314,13 +333,27 @@ def _posizione_logo(q: Qualita, larghezza_logo: int) -> tuple[int, int]:
     return x, round(distanza_visibile - alto * scala)
 
 
+def _intervalli_per_posizione(reel: Reel, produzione: ProduzioneReel) -> dict[float, list[tuple[float, float]]]:
+    """Per ogni posizione dei sottotitoli usata, gli intervalli (secondi) delle scene che la usano."""
+    risultato: dict[float, list[tuple[float, float]]] = {}
+    tempo = 0.0
+    for segmento in segmenti_parlati(reel):
+        stato = produzione.segmenti[segmento.chiave]
+        take = stato.take_attivo()
+        durata = take.durata if take else 0.0
+        if durata > 0:
+            risultato.setdefault(round(stato.posizione_sottotitoli), []).append((tempo, tempo + durata))
+        tempo += durata
+    return risultato
+
+
 def _passaggio_finale(reel: Reel, produzione: ProduzioneReel, q: Qualita, lavoro: Path, visivi: Path, voce: Path,
                       durata: float, uscita: Path, su_avanzamento: Callable[[float], None]) -> None:
     (lavoro / "fonts").mkdir(exist_ok=True)
     shutil.copy(FONTS_DIR / FILE_FONT, lavoro / "fonts" / FILE_FONT)
     shutil.copy(LOGO_PATH, lavoro / "logo.png")
 
-    usa_ass = produzione.sottotitoli_attivi or produzione.titolo_hook_attivo
+    usa_ass = produzione.sottotitoli_attivi
     if usa_ass:
         genera_ass(reel, produzione, lavoro / "sottotitoli.ass")
 
@@ -334,28 +367,42 @@ def _passaggio_finale(reel: Reel, produzione: ProduzioneReel, q: Qualita, lavoro
     larghezza_logo = round(q.larghezza * 0.14)
     x_logo, y_logo = _posizione_logo(q, larghezza_logo)
 
+    grafo = [f"[2:v]scale={larghezza_logo}:-1[logo]"]
     catena_video = "[0:v]"
     if usa_ass:
         # Il testo è bianco senza contorno: una sfumatura scura sotto le zone del testo
-        # lo tiene leggibile anche su riprese chiare. Ultimo ingresso, così gli indici
-        # di voce, logo e musica non cambiano.
-        _crea_velo_testo(q, produzione, lavoro / "velo.png")
-        indice_velo = 4 if musica else 3
-        ingressi += ["-i", "velo.png"]
-        catena_video = f"[0:v][{indice_velo}:v]overlay=0:0,ass=sottotitoli.ass:fontsdir=fonts[testo];[testo]"
-    grafo = [
-        f"[2:v]scale={larghezza_logo}:-1[logo]",
-        f"{catena_video}[logo]overlay={x_logo}:{y_logo},{_COLORE_VIDEO}[v]",
-    ]
+        # lo tiene leggibile anche su riprese chiare. Un velo in alto per il logo e uno
+        # per ogni posizione dei sottotitoli, acceso solo mentre quelle scene sono a
+        # schermo. Ingressi in coda, così gli indici di voce, logo e musica non cambiano.
+        veli: list[tuple[float | None, list[tuple[float, float]]]] = [(None, [])]
+        veli += _intervalli_per_posizione(reel, produzione).items()
+        indice = 4 if musica else 3
+        passi = []
+        corrente = "[0:v]"
+        for numero, (spostamento, intervalli) in enumerate(veli):
+            nome_png = f"velo{numero}.png"
+            _crea_velo_testo(q, spostamento, lavoro / nome_png)
+            ingressi += ["-i", nome_png]
+            abilita = ""
+            if intervalli:
+                condizione = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in intervalli)
+                abilita = f":enable='{condizione}'"
+            uscita_passo = f"[v{numero}]"
+            passi.append(f"{corrente}[{indice + numero}:v]overlay=0:0{abilita}{uscita_passo}")
+            corrente = uscita_passo
+        grafo += passi
+        catena_video = f"{corrente}ass=sottotitoli.ass:fontsdir=fonts[testo];[testo]"
+    grafo.append(f"{catena_video}[logo]overlay={x_logo}:{y_logo},{_COLORE_VIDEO}[v]")
     normalizza = "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000"
     if musica:
         grafo += [
             "[1:a]asplit=2[voce][chiave]",
             f"[3:a]aresample=48000,volume={produzione.musica_volume:.3f},atrim=0:{durata:.3f}[mus]",
             # La voce comanda il compressore sulla musica: quando si parla, la musica si abbassa.
-            "[mus][chiave]sidechaincompress=threshold=0.03:ratio=12:attack=20:release=400[sotto]",
-            f"[voce][sotto]amix=inputs=2:duration=first:normalize=0,{normalizza},"
-            f"afade=t=out:st={max(durata - 1.5, 0):.3f}:d=1.5[a]",
+            # Attacco e rilascio morbidi: tra una scena e l'altra la musica non "pompa".
+            "[mus][chiave]sidechaincompress=threshold=0.03:ratio=12:attack=40:release=700[sotto]",
+            # Il volume può arrivare a coprire la voce: un limitatore evita distorsioni.
+            f"[voce][sotto]amix=inputs=2:duration=first:normalize=0,{normalizza},alimiter=limit=0.95[a]",
         ]
     else:
         grafo.append(f"[1:a]{normalizza}[a]")
